@@ -17,7 +17,6 @@ interface HeaderProps {
 type HeaderLiveData = {
   operator: string;
   shaftId: string;
-  modelNo: string;
   time: string;
   date: string;
 };
@@ -50,12 +49,10 @@ function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
   };
   const shaftId = displayValue(payload.common?.shaftId || payload.header.shaftNumber);
   const operator = displayValue(payload.common?.operator || payload.header.operatorId);
-  const modelNo = displayValue(payload.common?.modelNo || payload.modelNo);
 
   return {
     operator,
     shaftId,
-    modelNo,
     time: fallbackClock.time,
     date: fallbackClock.date,
   };
@@ -66,7 +63,6 @@ export default function Header({ name, role, operatorName }: HeaderProps) {
   const [liveData, setLiveData] = useState<HeaderLiveData>(() => ({
     operator: String(operatorName ?? name),
     shaftId: '--',
-    modelNo: '--',
     time: '--:--:-- --',
     date: '--',
   }));
@@ -136,13 +132,46 @@ export default function Header({ name, role, operatorName }: HeaderProps) {
           transition: background 0.3s;
         }
 
+        .hdr-title-block {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 0 24px;
+          min-width: 0;
+        }
+
+        .hdr-title-tag {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 2.5px;
+          text-transform: uppercase;
+          color: #ff6200;
+          line-height: 1;
+          margin-bottom: 4px;
+        }
+
+        .hdr-title-main {
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          color: ${t.headerText};
+          line-height: 1.1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: color 0.3s;
+        }
+
+        .hdr-title-main span { color: #ff6200; }
+        .hdr-title-main .hdr-title-sub { color: ${t.headerText}; font-weight: 800; transition: color 0.3s; }
+
         .hdr-info-group {
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 0 20px;
-          flex: 1;
-          justify-content: center;
           flex-shrink: 0;
         }
 
@@ -276,15 +305,21 @@ export default function Header({ name, role, operatorName }: HeaderProps) {
         </div>
         <div className="hdr-vdivider" />
 
+        {/* CENTER: Title */}
+        <div className="hdr-title-block">
+          <div className="hdr-title-tag">Inspection Module</div>
+          <div className="hdr-title-main">
+            <span>ZDM</span>
+            <span className="hdr-title-sub"> - Titanium Shaft Inspection &amp; Assembly</span>
+          </div>
+        </div>
+        <div className="hdr-vdivider" />
+
         {/* Live values */}
         <div className="hdr-info-group">
           <div className="hdr-pill">
             <div className="hdr-pill-label">Shaft ID</div>
             <div className="hdr-pill-value accent">{liveData.shaftId}</div>
-          </div> <div className="hdr-vdivider" />
-          <div className="hdr-pill">
-            <div className="hdr-pill-label">Model</div>
-            <div className="hdr-pill-value">{liveData.modelNo}</div>
           </div> <div className="hdr-vdivider" />
           <div className="hdr-pill">
             <div className="hdr-pill-label">Operator</div>

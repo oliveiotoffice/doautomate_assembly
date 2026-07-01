@@ -262,34 +262,34 @@ function stationNumberLabel(station: Station): string {
 function makeAssemblyTheme(dark: boolean): AssemblyTheme {
   if (dark) {
     return {
-      bg: "#0f1217",
-      panel: "#151922",
-      panelAlt: "#1c222d",
-      surface: "#202733",
-      border: "#343c49",
-      borderSoft: "#2a3240",
+      bg: "#111418",
+      panel: "#1f252d",
+      panelAlt: "#28313b",
+      surface: "#303a46",
+      border: "#46515f",
+      borderSoft: "#3a4653",
       text: "#f8fafc",
       textMid: "#cbd5e1",
       muted: "#94a3b8",
       accent: "#ff6200",
       accentSoft: "rgba(255,98,0,0.16)",
-      ok: "#22c55e",
-      okSoft: "rgba(34,197,94,0.16)",
-      okBorder: "rgba(34,197,94,0.36)",
+      ok: "#31c878",
+      okSoft: "rgba(49,200,120,0.16)",
+      okBorder: "rgba(49,200,120,0.34)",
       ng: "#ef4444",
       ngSoft: "rgba(239,68,68,0.16)",
       ngBorder: "rgba(239,68,68,0.34)",
-      info: "#60a5fa",
-      infoSoft: "rgba(96,165,250,0.16)",
-      infoBorder: "rgba(96,165,250,0.34)",
+      info: "#7bb7ff",
+      infoSoft: "rgba(123,183,255,0.16)",
+      infoBorder: "rgba(123,183,255,0.34)",
       disabled: "#64748b",
-      imageBg: "#111827", svgLine: "#071b33",
-      svgRing: "#008a3d",
-      svgCardMid: "#e6edf4",
-      svgCardMidAlt: "#d9e2eb",
-      svgCardValue: "#0f4c8a",
-      svgCardBorder: "#aebdcc",
-      svgCardText: "#071b33",
+      imageBg: "#141a21", svgLine: "#e5eef8",
+      svgRing: "#31c878",
+      svgCardMid: "#2a3440",
+      svgCardMidAlt: "#344150",
+      svgCardValue: "#303a46",
+      svgCardBorder: "#64748b",
+      svgCardText: "#f8fafc",
     };
   }
 
@@ -808,7 +808,7 @@ function MetricReadout({
   };
   const cardBg = C.panel;
   const headerBg = C.surface;
-  const valueBg = "#f8fafc";
+  const valueBg = C.panelAlt;
 
   return (
     <div className="metric-readout" style={{
@@ -824,7 +824,7 @@ function MetricReadout({
       borderTop: `3px solid ${tone}`,
       background: cardBg,
       overflow: "hidden",
-      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(15,23,42,0.06)",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.22)",
       cursor: canOpenGraph ? "pointer" : "default",
       ...style,
     }}
@@ -1206,7 +1206,7 @@ function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: C
   const grade = pass ? "A" : "C";
 
   return (
-    <div className="qr-tile" style={{ minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(15,23,42,0.06)", ...style }}>
+    <div className="qr-tile" style={{ minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.22)", ...style }}>
       <div style={{ ...MONO, minWidth: 0, padding: "6px 8px", borderBottom: `1px solid ${C.borderSoft}`, background: C.surface, fontSize: fs.md, fontWeight: 900, color: C.text, textTransform: "uppercase" as const, lineHeight: 1, whiteSpace: "normal", textAlign: "center" }}>
         QR Grade
       </div>
@@ -1410,7 +1410,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, plcConnected, C
               <div className="station-subtitle" style={{ ...MONO, fontSize: "clamp(7px, min(3.9cqw, 0.86vh), 9px)", fontWeight: 700, color: C.textMid, marginTop: 2, lineHeight: 1.08, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{stationSubtitle(station)}</div>
             </div>
           </div>
-          <div style={{ ...MONO, minWidth: 68, textAlign: "center" as const, borderRadius: 3, padding: "4px 10px", background: "#f8fafc", border: `1px solid ${done ? C.ok : loading ? C.accent : C.border}`, color: done ? C.ok : loading ? C.accent : C.textMid, fontSize: fs.xs, fontWeight: 900, textTransform: "uppercase" as const, flexShrink: 0 }}>
+          <div style={{ ...MONO, minWidth: 68, textAlign: "center" as const, borderRadius: 3, padding: "4px 10px", background: C.panelAlt, border: `1px solid ${done ? C.ok : loading ? C.accent : C.border}`, color: done ? C.ok : loading ? C.accent : C.textMid, fontSize: fs.xs, fontWeight: 900, textTransform: "uppercase" as const, flexShrink: 0 }}>
             {done ? "Complete" : loading ? "Running" : "Ready"}
           </div>
         </div>
@@ -1768,7 +1768,7 @@ function AssemblySvgCard({
       <g clipPath={`url(#${clipId})`}>
         <rect x={0} y={0} width={width} height={row1} fill={C.panel} />
         <rect x={0} y={row1} width={width} height={row2} fill={C.panelAlt} />
-        <rect x={0} y={row1 + row2} width={width} height={row3} fill={C.ok} />
+        <rect x={0} y={row1 + row2} width={width} height={row3} fill={C.svgCardValue} />
         <line x1={0} y1={row1} x2={width} y2={row1} stroke={C.text} strokeWidth={0.6} />
         <line x1={0} y1={row1 + row2} x2={width} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
         <line x1={width / 2} y1={row1} x2={width / 2} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
