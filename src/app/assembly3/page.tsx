@@ -31,6 +31,7 @@ type ForceDepthSelection = {
   forceIndex: number;
   depthIndex: number;
 };
+type SvgValueStatus = "normal" | "pass" | "fail";
 type AssemblyApiPayload = {
   actuals?: Record<string, Record<string, number | null | undefined>>;
   common?: {
@@ -287,7 +288,7 @@ function makeAssemblyTheme(dark: boolean): AssemblyTheme {
       svgRing: "#31c878",
       svgCardMid: "#2a3440",
       svgCardMidAlt: "#344150",
-      svgCardValue: "#303a46",
+      svgCardValue: "#0f4c8a",
       svgCardBorder: "#64748b",
       svgCardText: "#f8fafc",
     };
@@ -359,17 +360,20 @@ function formatToleranceRange(param: Param): string {
 
 function inspectionSvgValues(name: string, actuals: Record<number, number>, plcConnected: boolean) {
   const param = INSPECTION_PARAMS.find((item) => item.name === name);
-  if (!param || !plcConnected) return { high: "-", low: "-", value: "-" };
+  if (!param || !plcConnected) return { high: "-", low: "-", value: "-", status: "normal" as SvgValueStatus };
 
   const index = INSPECTION_PARAMS.indexOf(param);
   const req = parseReq(param.required);
   const { lo, hi } = getTol(param.tolerance);
-  const actual = actuals[index] ?? req;
+  const liveActual = actuals[index];
+  const hasActual = typeof liveActual === "number";
+  const actual = hasActual ? liveActual : req;
 
   return {
     high: String(req + hi),
     low: String(req + lo),
     value: String(actual),
+    status: hasActual ? (checkPass(param, actual) ? "pass" : "fail") : "normal",
   };
 }
 
@@ -1735,6 +1739,7 @@ function AssemblySvgCard({
   high,
   low,
   value,
+  status,
   C,
 }: {
   x: number;
@@ -1743,6 +1748,7 @@ function AssemblySvgCard({
   high: string;
   low: string;
   value: string;
+  status: SvgValueStatus;
   C: AssemblyTheme;
 }) {
   const format = (raw: string) => {
@@ -1756,6 +1762,7 @@ function AssemblySvgCard({
   const row2 = 14;
   const row3 = height - row1 - row2;
   const clipId = `assembly-card-${x}-${y}`;
+  const valueFill = status === "pass" ? C.ok : status === "fail" ? C.ng : C.svgCardValue;
 
   return (
     <g transform={`translate(${x}, ${y})`}>
@@ -1768,7 +1775,7 @@ function AssemblySvgCard({
       <g clipPath={`url(#${clipId})`}>
         <rect x={0} y={0} width={width} height={row1} fill={C.panel} />
         <rect x={0} y={row1} width={width} height={row2} fill={C.panelAlt} />
-        <rect x={0} y={row1 + row2} width={width} height={row3} fill={C.svgCardValue} />
+        <rect x={0} y={row1 + row2} width={width} height={row3} fill={valueFill} />
         <line x1={0} y1={row1} x2={width} y2={row1} stroke={C.text} strokeWidth={0.6} />
         <line x1={0} y1={row1 + row2} x2={width} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
         <line x1={width / 2} y1={row1} x2={width / 2} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
@@ -1883,6 +1890,7 @@ function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actu
         high={dowelLength.high}
         low={dowelLength.low}
         value={dowelLength.value}
+        status={dowelLength.status}
         C={C}
       />
 
@@ -1899,6 +1907,7 @@ function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actu
         high={leftOverallDiameter.high}
         low={leftOverallDiameter.low}
         value={leftOverallDiameter.value}
+        status={leftOverallDiameter.status}
         C={C}
       />
       {/* Right side 35 diameter */}
@@ -1915,6 +1924,7 @@ function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actu
         high={rightOverallDiameter.high}
         low={rightOverallDiameter.low}
         value={rightOverallDiameter.value}
+        status={rightOverallDiameter.status}
         C={C}
       />
 
@@ -1931,6 +1941,7 @@ function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actu
         high={leftMillingHeight.high}
         low={leftMillingHeight.low}
         value={leftMillingHeight.value}
+        status={leftMillingHeight.status}
         C={C}
       />
 
@@ -1949,6 +1960,7 @@ function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actu
         high={rightMillingHeight.high}
         low={rightMillingHeight.low}
         value={rightMillingHeight.value}
+        status={rightMillingHeight.status}
         C={C}
       />
 
