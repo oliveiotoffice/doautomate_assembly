@@ -11,12 +11,10 @@ const LIVE_REFRESH_MS = 1000;
 interface HeaderProps {
   name: string;
   role: string;
-  shiftNumber?: string | number;
   operatorName?: string | number;
 }
 
 type HeaderLiveData = {
-  shift: string | number;
   operator: string;
   shaftId: string;
   modelNo: string;
@@ -55,7 +53,6 @@ function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
   const modelNo = displayValue(payload.common?.modelNo || payload.modelNo);
 
   return {
-    shift: payload.common?.shift ?? '--',
     operator,
     shaftId,
     modelNo,
@@ -64,10 +61,9 @@ function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
   };
 }
 
-export default function Header({ name, role, shiftNumber = 1, operatorName }: HeaderProps) {
+export default function Header({ name, role, operatorName }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const [liveData, setLiveData] = useState<HeaderLiveData>(() => ({
-    shift: shiftNumber,
     operator: String(operatorName ?? name),
     shaftId: '--',
     modelNo: '--',
@@ -132,37 +128,6 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
           transition: border-color 0.3s;
         }
 
-        .hdr-title-block {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          padding: 0 24px;
-        }
-
-        .hdr-title-tag {
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 2.5px;
-          text-transform: uppercase;
-          color: #ff6200;
-          line-height: 1;
-          margin-bottom: 4px;
-        }
-
-        .hdr-title-main {
-          font-size: 20px;
-          font-weight: 800;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-          color: ${t.headerText};
-          line-height: 1.1;
-          transition: color 0.3s;
-        }
-
-        .hdr-title-main span { color: #ff6200; }
-        .hdr-title-main .hdr-title-sub { color: ${t.headerText}; font-weight: 800; transition: color 0.3s; }
-
         .hdr-vdivider {
           width: 1px;
           height: 40px;
@@ -176,6 +141,8 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
           align-items: center;
           gap: 8px;
           padding: 0 20px;
+          flex: 1;
+          justify-content: center;
           flex-shrink: 0;
         }
 
@@ -185,10 +152,11 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
           align-items: center;
           background: ${t.headerSurface};
           border: 1px solid ${t.headerBorderColor};
-          border-radius: 8px;
-          padding: 6px 14px;
-          min-width: 80px;
-          transition: background 0.3s, border-color 0.3s;
+          border-radius: 6px;
+          padding: 7px 16px;
+          min-width: 112px;
+          box-shadow: ${t.mode === 'dark' ? 'inset 0 1px 0 rgba(255,255,255,0.04)' : 'none'};
+          transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
         }
 
         .hdr-pill-label {
@@ -219,23 +187,13 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
           align-items: flex-end;
           padding: 0 20px;
           flex-shrink: 0;
-          gap: 3px;
         }
 
         .hdr-time {
-          font-size: 20px;
+          font-size: 19px;
           font-weight: 700;
           color: ${t.headerText};
           letter-spacing: 1px;
-          line-height: 1;
-          transition: color 0.3s;
-        }
-
-        .hdr-date {
-          font-size: 11px;
-          font-weight: 500;
-          color: ${t.headerMuted};
-          letter-spacing: 0.3px;
           line-height: 1;
           transition: color 0.3s;
         }
@@ -316,42 +274,10 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
             unoptimized
           />
         </div>
-
-        {/* CENTER: Title */}
-        <div className="hdr-title-block">
-          <div className="hdr-title-tag">Inspection Module</div>
-          <div className="hdr-title-main">
-            <span>ZDM</span>
-            <span className="hdr-title-sub"> - Titanium Shaft Inspection &amp; Assembly</span>
-          </div>
-        </div>
-                <div className="hdr-vdivider" />
-        {/* FAR RIGHT: Dark / Light toggle */}
-        <div className="hdr-theme-toggle-block">
-          <button
-            type="button"
-            className="hdr-toggle-track"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${t.mode === 'dark' ? 'light' : 'dark'} mode`}
-            title={`Switch to ${t.mode === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            <div className="hdr-toggle-icon">
-              <Moon size={11} />
-            </div>
-            <div className="hdr-toggle-icon">
-              <Sun size={11} />
-            </div>
-            <div className="hdr-toggle-thumb" />
-          </button>
-        </div>
         <div className="hdr-vdivider" />
 
-        {/* Shift + Operator */}
+        {/* Live values */}
         <div className="hdr-info-group">
-          <div className="hdr-pill">
-            <div className="hdr-pill-label">Shift</div>
-            <div className="hdr-pill-value accent">#{liveData.shift}</div>
-          </div> <div className="hdr-vdivider" /> 
           <div className="hdr-pill">
             <div className="hdr-pill-label">Shaft ID</div>
             <div className="hdr-pill-value accent">{liveData.shaftId}</div>
@@ -371,7 +297,27 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
         {/* Live datetime */}
         <div className="hdr-datetime-block">
           <div className="hdr-time">{liveData.time}</div>
-          <div className="hdr-date">{liveData.date}</div>
+        </div>
+
+        <div className="hdr-vdivider" />
+
+        {/* Theme toggle */}
+        <div className="hdr-theme-toggle-block">
+          <button
+            type="button"
+            className="hdr-toggle-track"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${t.mode === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${t.mode === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            <div className="hdr-toggle-icon">
+              <Moon size={11} />
+            </div>
+            <div className="hdr-toggle-icon">
+              <Sun size={11} />
+            </div>
+            <div className="hdr-toggle-thumb" />
+          </button>
         </div>
 
         <div className="hdr-vdivider" />

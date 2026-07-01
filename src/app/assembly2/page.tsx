@@ -143,7 +143,7 @@ const STATIONS: Station[] = [
     ],
   },
   {
-    id: 8, name: "STATION 08 - Ball Press Station", code: "STATION 08", seqLabel: "Balls\nFed",
+    id: 8, name: "STATION 8 - Ball Press Station", code: "STATION 8", seqLabel: "Balls\nFed",
     params: [
       { name: "Plug L Force", method: "Force Sensor", required: "3.55 kN", tolerance: "Â±0.1", unit: "kN" },
       { name: "Plug L Depth", method: "Laser Distance", required: "16.10 mm", tolerance: "Â±0.05", unit: "mm" },
@@ -153,7 +153,7 @@ const STATIONS: Station[] = [
   },
 
   {
-    id: 9, name: "STATION 09 - Dowel Pin Press Station", code: "STATION 09", seqLabel: "Dowel\nPress",
+    id: 9, name: "STATION 9 - Dowel Pin Press Station", code: "STATION 9", seqLabel: "Dowel\nPress",
     params: [
       { name: "Dowel L Force", method: "Force Sensor", required: "2.85 kN", tolerance: "+/-0.1", unit: "kN" },
       { name: "Dowel L Height", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
@@ -187,9 +187,9 @@ const BALL_PRESS_PARAMS: Param[] = [
 ];
 
 const DISPLAY_STATIONS = STATIONS.map((station) => {
-  if (station.id === 7) return { ...station, name: "Plug Press", code: "STATION 07", seqLabel: "Plug\nPress", params: PLUG_PRESS_PARAMS };
-  if (station.id === 8) return { ...station, name: "Ball Press", code: "STATION 08", seqLabel: "Ball\nPress", params: BALL_PRESS_PARAMS };
-  if (station.id === 9) return { ...station, name: "Dowel Press", code: "STATION 09", seqLabel: "Dowel\nPress" };
+  if (station.id === 7) return { ...station, name: "Plug Press", code: "STATION 7", seqLabel: "Plug\nPress", params: PLUG_PRESS_PARAMS };
+  if (station.id === 8) return { ...station, name: "Ball Press", code: "STATION 8", seqLabel: "Ball\nPress", params: BALL_PRESS_PARAMS };
+  if (station.id === 9) return { ...station, name: "Dowel Press", code: "STATION 9", seqLabel: "Dowel\nPress" };
   return station;
 });
 
@@ -277,7 +277,7 @@ function stationSubtitle(station: Station): string {
 }
 
 function stationNumberLabel(station: Station): string {
-  return station.id === 7 ? "7" : String(station.id).padStart(2, "0");
+  return String(station.id);
 }
 
 function makeAssemblyTheme(dark: boolean): AssemblyTheme {

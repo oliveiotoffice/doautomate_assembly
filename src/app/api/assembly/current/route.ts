@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ASSEMBLY_BACKEND_URL = (process.env.ASSEMBLY_BACKEND_URL || "http://localhost:5015").replace(/\/+$/, "");
+const ASSEMBLY_BACKEND_URL = "http://localhost:5019";
 
 function makeDisconnectedPayload(message: string) {
   const updatedAt = new Date().toISOString();

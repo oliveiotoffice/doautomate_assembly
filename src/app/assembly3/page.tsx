@@ -143,7 +143,7 @@ const STATIONS: Station[] = [
     ],
   },
   {
-    id: 9, name: "STATION 09 - Dowel Pin Press Station", code: "STATION 09", seqLabel: "Dowel\nPress",
+    id: 9, name: "STATION 9 - Dowel Pin Press Station", code: "STATION 9", seqLabel: "Dowel\nPress",
     params: [
       { name: "Dowel L Force", method: "Force Sensor", required: "2.85 kN", tolerance: "+/-0.1", unit: "kN" },
       { name: "Dowel L Height", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
@@ -171,8 +171,8 @@ const PLUG_PRESS_PARAMS: Param[] = [
 
 
 const DISPLAY_STATIONS = STATIONS.map((station) => {
-  if (station.id === 7) return { ...station, name: "Plug Press", code: "STATION 07", seqLabel: "Plug\nPress", params: PLUG_PRESS_PARAMS };
-  if (station.id === 9) return { ...station, name: "Dowel Press", code: "STATION 09", seqLabel: "Dowel\nPress" };
+  if (station.id === 7) return { ...station, name: "Plug Press", code: "STATION 7", seqLabel: "Plug\nPress", params: PLUG_PRESS_PARAMS };
+  if (station.id === 9) return { ...station, name: "Dowel Press", code: "STATION 9", seqLabel: "Dowel\nPress" };
   return station;
 });
 
@@ -256,7 +256,7 @@ function stationSubtitle(station: Station): string {
 }
 
 function stationNumberLabel(station: Station): string {
-  return station.id === 7 ? "7" : String(station.id).padStart(2, "0");
+  return String(station.id);
 }
 
 function makeAssemblyTheme(dark: boolean): AssemblyTheme {

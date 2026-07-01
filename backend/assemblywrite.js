@@ -12,7 +12,7 @@ const {
   writeWordsInChunks,
 } = require("./assembly-layout");
 
-const WRITE_UI_PORT = Number(process.env.ASSEMBLY_WRITE_UI_PORT || 5016);
+const WRITE_UI_PORT = 5019;
 const DEFAULT_WRITE_INTERVAL_MS = 3000;
 const DEFAULT_ERROR_DELAY_MS = 10000;
 

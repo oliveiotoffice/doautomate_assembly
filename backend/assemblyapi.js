@@ -9,7 +9,7 @@ const {
   readWordsInChunks,
 } = require("./assembly-layout");
 
-const PORT = Number(process.env.ASSEMBLY_BACKEND_PORT || 5015);
+const PORT = 5019;
 const POLL_MS = Number(process.env.ASSEMBLY_POLL_MS || process.env.PLC_POLL_MS || 1000);
 const ERROR_DELAY_MS = Number(process.env.PLC_ERROR_DELAY_MS || 10000);
 const READ_CHUNK_SIZE = Number(process.env.ASSEMBLY_READ_CHUNK_SIZE || process.env.PLC_READ_CHUNK_SIZE || 50);
