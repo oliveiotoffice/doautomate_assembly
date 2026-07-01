@@ -65,6 +65,12 @@ type AssemblyApiPayload = {
     connected?: boolean;
     message?: string;
   };
+  statusRegisters?: {
+    station11?: {
+      completedStatus?: number;
+      qrGrade?: string;
+    };
+  };
 };
 
 const LIVE_REFRESH_MS = 1000;
@@ -777,14 +783,15 @@ function StationPanel({ station, done, loading, actuals, onRun, C }: {
             </thead>
             <tbody>
               {station.params.map((p, i) => {
-                const actual = actuals[i] ?? parseReq(p.required);
-                const pass = checkPass(p, actual);
+                const actual = actuals[i];
+                const hasActual = typeof actual === "number";
+                const pass = false;
                 return (
                   <tr key={i} style={{ borderBottom: i < station.params.length - 1 ? `1px solid ${C.borderSoft}` : "none" }}>
                     <td style={{ padding: "7px 10px", fontWeight: 600, color: C.text, fontSize: 10.5 }}>{p.name}</td>
                     <td style={{ padding: "7px 10px", color: C.textMid, fontSize: 10 }}>{p.method}</td>
-                    <td style={{ ...MONO, padding: "7px 10px", color: C.textMid, fontSize: fs.xs }}>{p.required}</td>
-                    <td style={{ ...MONO, padding: "7px 10px", fontWeight: 800, fontSize: fs.sm, color: pass ? C.ok : C.ng, transition: "color .3s" }}>{actual.toFixed(3)}</td>
+                    <td style={{ ...MONO, padding: "7px 10px", color: C.textMid, fontSize: fs.xs }}>-</td>
+                    <td style={{ ...MONO, padding: "7px 10px", fontWeight: 800, fontSize: fs.sm, color: hasActual ? C.textMid : C.muted, transition: "color .3s" }}>{hasActual ? actual.toFixed(3) : "-"}</td>
                     <td style={{ padding: "7px 10px" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" as const, background: pass ? C.okSoft : C.ngSoft, color: pass ? C.ok : C.ng }}>
                         {pass ? <><CheckSVG s={9} /> OK</> : <>âœ• NG</>}
@@ -943,12 +950,16 @@ function ForceDepthGraph({
   depthParam,
   forceActual,
   depthActual,
+  forceRange,
+  depthRange,
   C,
 }: {
   forceParam: Param;
   depthParam: Param;
   forceActual: number;
   depthActual: number;
+  forceRange?: LiveRange;
+  depthRange?: LiveRange;
   C: AssemblyTheme;
 }) {
   const width = 780;
@@ -956,8 +967,8 @@ function ForceDepthGraph({
   const pad = { top: 24, right: 28, bottom: 62, left: 72 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = height - pad.top - pad.bottom;
-  const forceSet = parseReq(forceParam.required);
-  const depthSet = parseReq(depthParam.required);
+  const forceSet = forceRange ? (forceRange.min + forceRange.max) / 2 : forceActual;
+  const depthSet = depthRange ? (depthRange.min + depthRange.max) / 2 : depthActual;
   const forceMax = Math.max(forceActual, forceSet, 0.1) * 1.18;
   const depthMax = Math.max(depthActual, depthSet, 0.1) * 1.14;
   const xOf = (force: number) => pad.left + (Math.max(0, Math.min(force, forceMax)) / forceMax) * plotWidth;
@@ -1022,13 +1033,15 @@ function ForceDepthGraph({
 function ForceDepthValueCard({
   param,
   actual,
+  range,
   C,
 }: {
   param: Param;
   actual: number;
+  range?: LiveRange;
   C: AssemblyTheme;
 }) {
-  const pass = checkPass(param, actual);
+  const pass = checkPass(param, actual, range);
   const tone = pass ? C.ok : C.ng;
 
   return (
@@ -1060,7 +1073,7 @@ function ForceDepthValueCard({
       </div>
       <div style={{ padding: "8px 11px", borderTop: `1px solid ${C.border}`, background: C.panelAlt }}>
         <span style={{ ...MONO, display: "block", minWidth: 0, fontSize: fs.sm, fontWeight: 800, color: C.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          TOL : {formatToleranceRange(param)} {formatUnit(param.unit)}
+          TOL : {formatToleranceRange(param, range)} {formatUnit(param.unit)}
         </span>
       </div>
     </div>
@@ -1146,12 +1159,14 @@ function ForceDepthModal({
   station,
   selection,
   actuals,
+  ranges,
   C,
   onClose,
 }: {
   station: Station;
   selection: ForceDepthSelection;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   C: AssemblyTheme;
   onClose: () => void;
 }) {
@@ -1160,8 +1175,11 @@ function ForceDepthModal({
   const depthParam = params[selection.depthIndex];
   if (!forceParam || !depthParam) return null;
 
-  const forceActual = actuals[selection.forceIndex] ?? parseReq(forceParam.required);
-  const depthActual = actuals[selection.depthIndex] ?? parseReq(depthParam.required);
+  const forceActual = actuals[selection.forceIndex];
+  const depthActual = actuals[selection.depthIndex];
+  if (typeof forceActual !== "number" || typeof depthActual !== "number") return null;
+  const forceRange = ranges[selection.forceIndex];
+  const depthRange = ranges[selection.depthIndex];
 
   return (
     <div
@@ -1236,11 +1254,11 @@ function ForceDepthModal({
 
         <div style={{ minHeight: 0, padding: 14, display: "grid", gridTemplateRows: "minmax(0, 1fr) auto", gap: 12, background: C.imageBg }}>
           <div style={{ minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 4, background: C.panel, overflow: "hidden" }}>
-            <ForceDepthGraph forceParam={forceParam} depthParam={depthParam} forceActual={forceActual} depthActual={depthActual} C={C} />
+            <ForceDepthGraph forceParam={forceParam} depthParam={depthParam} forceActual={forceActual} depthActual={depthActual} forceRange={forceRange} depthRange={depthRange} C={C} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, minWidth: 0 }}>
-            <ForceDepthValueCard param={forceParam} actual={forceActual} C={C} />
-            <ForceDepthValueCard param={depthParam} actual={depthActual} C={C} />
+            <ForceDepthValueCard param={forceParam} actual={forceActual} range={forceRange} C={C} />
+            <ForceDepthValueCard param={depthParam} actual={depthActual} range={depthRange} C={C} />
           </div>
         </div>
       </div>
@@ -1248,9 +1266,11 @@ function ForceDepthModal({
   );
 }
 
-function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: CSSProperties }) {
-  const tone = pass ? C.ok : C.ng;
-  const grade = pass ? "A" : "C";
+function QRTile({ C, grade, style }: { C: AssemblyTheme; grade: string; style?: CSSProperties }) {
+  const normalizedGrade = grade.trim().toUpperCase();
+  const hasGrade = normalizedGrade.length > 0;
+  const pass = normalizedGrade === "A";
+  const tone = !hasGrade ? C.muted : pass ? C.ok : C.ng;
 
   return (
     <div className="qr-tile" style={{ minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.22)", ...style }}>
@@ -1260,16 +1280,17 @@ function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: C
       <div style={{ minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px 6px", background: C.panel }}>
         <QrCode color={tone} strokeWidth={2.4} style={{ width: "clamp(30px, 3.8vw, 54px)", height: "clamp(30px, 3.8vw, 54px)", flexShrink: 0 }} />
         <span style={{ ...MONO, color: tone, fontSize: fs.sm, fontWeight: 900, letterSpacing: "0.08em", lineHeight: 1.1, textAlign: "center", textTransform: "uppercase" as const, whiteSpace: "normal" }}>
-          Grade {grade}
+          Grade {hasGrade ? normalizedGrade : "-"}
         </span>
       </div>
     </div>
   );
 }
-function StationMeasurementView({ station, actuals, ranges, plcConnected, C, onOpenGraph }: {
+function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnected, C, onOpenGraph }: {
   station: Station;
   actuals: Record<number, number>;
   ranges: Record<number, LiveRange>;
+  qrGrade: string;
   plcConnected: boolean;
   C: AssemblyTheme;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
@@ -1323,7 +1344,7 @@ function StationMeasurementView({ station, actuals, ranges, plcConnected, C, onO
           const i = params.indexOf(p);
           const actual = plcConnected ? actuals[i] ?? null : null;
           const pass = actual !== null && checkPass(p, actual, ranges[i]);
-          if (name === "QR Grade") return <QRTile key={name} C={C} pass={pass} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
+          if (name === "QR Grade") return <QRTile key={name} C={C} grade={plcConnected ? qrGrade : ""} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
           return (
             <MetricReadout
               key={p.name}
@@ -1423,12 +1444,13 @@ function StationMeasurementView({ station, actuals, ranges, plcConnected, C, onO
   );
 }
 
-function AssemblyStationPanel({ station, done, loading, actuals, ranges, plcConnected, C }: {
+function AssemblyStationPanel({ station, done, loading, actuals, ranges, qrGrade, plcConnected, C }: {
   station: Station;
   done: boolean;
   loading: boolean;
   actuals: Record<number, number>;
   ranges: Record<number, LiveRange>;
+  qrGrade: string;
   plcConnected: boolean;
   C: AssemblyTheme;
 }) {
@@ -1450,6 +1472,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, ranges, plcConn
           station={station}
           selection={selectedGraph}
           actuals={actuals}
+          ranges={ranges}
           C={C}
           onClose={() => setSelectedGraph(null)}
         />
@@ -1471,7 +1494,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, ranges, plcConn
         {station.params.length === 0 ? (
           <div style={{ ...MONO, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: fs.lg, fontWeight: 800 }}>No parameters</div>
         ) : (
-          <StationMeasurementView station={station} actuals={actuals} ranges={ranges} plcConnected={plcConnected} C={C} onOpenGraph={setSelectedGraph} />
+          <StationMeasurementView station={station} actuals={actuals} ranges={ranges} qrGrade={qrGrade} plcConnected={plcConnected} C={C} onOpenGraph={setSelectedGraph} />
         )}
 
       </div>
@@ -2254,6 +2277,7 @@ export default function Dashboard() {
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [liveActuals, setLiveActuals] = useState<LiveActuals>({});
   const [liveRanges, setLiveRanges] = useState<LiveRanges>({});
+  const [qrGrade, setQrGrade] = useState("");
   const [totalInspected, setTotalInspected] = useState(0);
   const [okCount, setOkCount] = useState(0);
   const [ngCount, setNgCount] = useState(0);
@@ -2320,6 +2344,7 @@ export default function Dashboard() {
         setPlcErrorMessage(apiMessage(payload));
         setLiveActuals(connected ? normalizeApiActuals(payload.actuals) : {});
         setLiveRanges(connected ? normalizeApiRanges(payload.ranges) : {});
+        setQrGrade(connected ? String(payload.statusRegisters?.station11?.qrGrade || "") : "");
         setCompletedIds(connected ? completedStationIdsFromApi(payload, PARAM_STATIONS) : []);
         setProcessingId(null);
         setTotalInspected(payload.summary?.total ?? payload.common?.partsProcessed ?? 0);
@@ -2336,6 +2361,7 @@ export default function Dashboard() {
         setPlcErrorMessage(message);
         setLiveActuals({});
         setLiveRanges({});
+        setQrGrade("");
         setCompletedIds([]);
         setProcessingId(null);
         setTotalInspected(0);
@@ -2645,7 +2671,7 @@ export default function Dashboard() {
             ) : (
               activeStations.map(st => (
                 <div key={st.id} className={`station-cell ${st.id === 11 ? "inspection-station-cell" : ""}`}>
-                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} ranges={liveRanges[st.id] || {}} plcConnected={plcConnected} C={C} />
+                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} ranges={liveRanges[st.id] || {}} qrGrade={qrGrade} plcConnected={plcConnected} C={C} />
                 </div>
               ))
             )}

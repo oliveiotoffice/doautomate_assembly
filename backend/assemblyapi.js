@@ -101,6 +101,7 @@ function makePayload(words, config) {
     statusRegisters: {
       station11: {
         completedStatus: decoded.stations[11].completedStatus,
+        qrGrade: decoded.stations[11].qrGrade || "",
       },
     },
     registerMap: {
@@ -171,7 +172,7 @@ function makeDisconnectedPayload(message) {
     actuals: {},
     ranges: {},
     stations: {},
-    statusRegisters: { station11: { completedStatus: 0 } },
+    statusRegisters: { station11: { completedStatus: 0, qrGrade: "" } },
     summary: { total: 0, ok: 0, ng: 0, scrap: 0, rework: 0 },
     source: { backendUrl: "mc://unavailable", connected: false, message, updatedAt },
     plc: {
