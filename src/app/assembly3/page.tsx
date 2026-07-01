@@ -1296,6 +1296,15 @@ function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnecte
       "Dowel Right Depth",
       "QR Grade",
     ];
+    const inspectionGridStyle = (layoutIndex: number): CSSProperties => {
+      const row = layoutIndex < 4 ? 1 : layoutIndex < 8 ? 2 : 3;
+      const indexInRow = row === 1 ? layoutIndex : row === 2 ? layoutIndex - 4 : layoutIndex - 8;
+      const span = row === 3 ? 4 : 5;
+      return {
+        gridColumn: `${indexInRow * span + 1} / span ${span}`,
+        gridRow: row,
+      };
+    };
 
     return (
       <div
@@ -1308,7 +1317,7 @@ function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnecte
           minHeight: 0,
           padding: 4,
           display: "grid",
-          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(20, minmax(0, 1fr))",
           gridTemplateRows: "repeat(3, minmax(0, 1fr))",
           gap: 4,
           overflow: "hidden",
@@ -1321,7 +1330,7 @@ function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnecte
           const i = params.indexOf(p);
           const actual = plcConnected ? actuals[i] ?? null : null;
           const pass = actual !== null && checkPass(p, actual, ranges[i]);
-          if (name === "QR Grade") return <QRTile key={name} C={C} grade={plcConnected ? qrGrade : ""} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
+          if (name === "QR Grade") return <QRTile key={name} C={C} grade={plcConnected ? qrGrade : ""} style={inspectionGridStyle(layoutIndex)} />;
           return (
             <MetricReadout
               key={p.name}
@@ -1330,10 +1339,7 @@ function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnecte
               pass={pass}
               range={ranges[i]}
               C={C}
-              style={{
-                gridColumn: (layoutIndex % 5) + 1,
-                gridRow: Math.floor(layoutIndex / 5) + 1,
-              }}
+              style={inspectionGridStyle(layoutIndex)}
             />
           );
         })}
@@ -2435,7 +2441,7 @@ export default function Dashboard() {
           height:100% !important;
           min-width:0 !important;
           min-height:0 !important;
-          grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+          grid-template-columns:repeat(20,minmax(0,1fr)) !important;
           grid-template-rows:repeat(3,minmax(0,1fr)) !important;
           gap:clamp(4px, 0.4dvh, 6px) !important;
           padding:clamp(4px, 0.4dvh, 6px) !important;
