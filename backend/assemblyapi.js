@@ -31,6 +31,12 @@ function numberActual(reading) {
   return reading && typeof reading.actual === "number" ? reading.actual : null;
 }
 
+function numberRange(reading) {
+  return reading && typeof reading.min === "number" && typeof reading.max === "number"
+    ? { min: reading.min, max: reading.max }
+    : null;
+}
+
 function makePayload(words, config) {
   const decoded = decodeAssembly(words);
   const modelNo = String(decoded.common.modelNo ?? 0);
@@ -69,6 +75,27 @@ function makePayload(words, config) {
         3: numberActual(decoded.stations[9].dowelRightDepth),
       },
       11: Object.fromEntries(Object.values(decoded.stations[11]).filter(item => item && typeof item === "object" && "actual" in item).map((item, index) => [index, item.actual])),
+    },
+    ranges: {
+      7: {
+        0: numberRange(decoded.stations[7].plugLeftForce),
+        1: numberRange(decoded.stations[7].plugLeftDepth),
+        2: numberRange(decoded.stations[7].plugRightForce),
+        3: numberRange(decoded.stations[7].plugRightDepth),
+      },
+      8: {
+        0: numberRange(decoded.stations[8].ballLeftForce),
+        1: numberRange(decoded.stations[8].ballLeftDepth),
+        2: numberRange(decoded.stations[8].ballRightForce),
+        3: numberRange(decoded.stations[8].ballRightDepth),
+      },
+      9: {
+        0: numberRange(decoded.stations[9].dowelLeftForce),
+        1: numberRange(decoded.stations[9].dowelLeftDepth),
+        2: numberRange(decoded.stations[9].dowelRightForce),
+        3: numberRange(decoded.stations[9].dowelRightDepth),
+      },
+      11: Object.fromEntries(Object.values(decoded.stations[11]).filter(item => item && typeof item === "object" && "actual" in item).map((item, index) => [index, numberRange(item)])),
     },
     stations: decoded.stations,
     statusRegisters: {
@@ -142,6 +169,7 @@ function makeDisconnectedPayload(message) {
     modelNo: "0",
     modelNumber: "-",
     actuals: {},
+    ranges: {},
     stations: {},
     statusRegisters: { station11: { completedStatus: 0 } },
     summary: { total: 0, ok: 0, ng: 0, scrap: 0, rework: 0 },

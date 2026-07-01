@@ -26,6 +26,8 @@ interface Station {
 }
 
 type LiveActuals = Record<number, Record<number, number>>;
+type LiveRange = { min: number; max: number };
+type LiveRanges = Record<number, Record<number, LiveRange>>;
 type SummaryIcon = typeof PackageCheck;
 type ForceDepthSelection = {
   forceIndex: number;
@@ -34,6 +36,7 @@ type ForceDepthSelection = {
 type SvgValueStatus = "normal" | "pass" | "fail";
 type AssemblyApiPayload = {
   actuals?: Record<string, Record<string, number | null | undefined>>;
+  ranges?: Record<string, Record<string, LiveRange | null | undefined>>;
   common?: {
     modelNo?: string | number;
     componentNo?: string | number;
@@ -86,16 +89,32 @@ function normalizeApiActuals(actuals: AssemblyApiPayload["actuals"]): LiveActual
   return normalized;
 }
 
+function normalizeApiRanges(ranges: AssemblyApiPayload["ranges"]): LiveRanges {
+  if (!ranges) return {};
+  const normalized: LiveRanges = {};
+  Object.entries(ranges).forEach(([stationId, values]) => {
+    normalized[Number(stationId)] = {};
+    Object.entries(values || {}).forEach(([index, range]) => {
+      if (range && typeof range.min === "number" && typeof range.max === "number") {
+        normalized[Number(stationId)][Number(index)] = range;
+      }
+    });
+  });
+  return normalized;
+}
+
 function completedStationIdsFromApi(payload: AssemblyApiPayload | null, stations: Station[]): number[] {
   if (!apiConnected(payload)) return [];
   const actuals = normalizeApiActuals(payload?.actuals);
+  const ranges = normalizeApiRanges(payload?.ranges);
   return stations
     .filter((station) => {
       const stationActuals = actuals[station.id] || {};
+      const stationRanges = ranges[station.id] || {};
       const params = station.id === 11 ? INSPECTION_PARAMS : station.params;
       if (params.length === 0) return false;
       return params.every((param, index) =>
-        typeof stationActuals[index] === "number" && checkPass(param, stationActuals[index])
+        typeof stationActuals[index] === "number" && checkPass(param, stationActuals[index], stationRanges[index])
       );
     })
     .map((station) => station.id);
@@ -364,37 +383,34 @@ function getTol(t: string): { lo: number; hi: number } {
   return v < 0 ? { lo: v, hi: 0 } : { lo: -v, hi: v };
 }
 
-function checkPass(param: Param, actual: number): boolean {
-  const req = parseReq(param.required);
-  const { lo, hi } = getTol(param.tolerance);
-  return actual >= req + lo && actual <= req + hi;
+function checkPass(param: Param, actual: number, range?: LiveRange): boolean {
+  return Boolean(range) && actual >= range!.min && actual <= range!.max;
 }
 
-function formatToleranceRange(param: Param): string {
+function formatToleranceRange(param: Param, range?: LiveRange): string {
+  if (!range) return "-";
   const req = parseReq(param.required);
   const { lo, hi } = getTol(param.tolerance);
   const decimals = param.unit === "kN" ? 2 : param.unit === "grade" ? 2 : 3;
-  const low = req + lo;
-  const high = req + hi;
+  const low = range ? range.min : req + lo;
+  const high = range ? range.max : req + hi;
   return `${low.toFixed(decimals)} - ${high.toFixed(decimals)}`;
 }
 
-function inspectionSvgValues(name: string, actuals: Record<number, number>, plcConnected: boolean) {
+function inspectionSvgValues(name: string, actuals: Record<number, number>, ranges: Record<number, LiveRange>, plcConnected: boolean) {
   const param = INSPECTION_PARAMS.find((item) => item.name === name);
   if (!param || !plcConnected) return { high: "-", low: "-", value: "-", status: "normal" as SvgValueStatus };
 
   const index = INSPECTION_PARAMS.indexOf(param);
-  const req = parseReq(param.required);
-  const { lo, hi } = getTol(param.tolerance);
+  const range = ranges[index];
   const liveActual = actuals[index];
   const hasActual = typeof liveActual === "number";
-  const actual = hasActual ? liveActual : req;
 
   return {
-    high: String(req + hi),
-    low: String(req + lo),
-    value: String(actual),
-    status: hasActual ? (checkPass(param, actual) ? "pass" : "fail") : "normal",
+    high: range ? String(range.max) : "-",
+    low: range ? String(range.min) : "-",
+    value: hasActual ? String(liveActual) : "-",
+    status: (hasActual && range ? (checkPass(param, liveActual, range) ? "pass" : "fail") : "normal") as SvgValueStatus,
   };
 }
 
@@ -809,6 +825,7 @@ function MetricReadout({
   param,
   actual,
   pass,
+  range,
   C,
   style,
   graphPair,
@@ -817,6 +834,7 @@ function MetricReadout({
   param: Param;
   actual: number | null;
   pass: boolean;
+  range?: LiveRange;
   C: AssemblyTheme;
   style?: CSSProperties;
   graphPair?: ForceDepthSelection | null;
@@ -893,7 +911,7 @@ function MetricReadout({
 
       <div style={{ minWidth: 0, minHeight: "calc(22px * var(--h-scale))", padding: "4px 6px", borderTop: `1px solid ${C.borderSoft}`, background: C.panel, display: "flex", alignItems: "center" }}>
         <span style={{ ...MONO, display: "block", minWidth: 0, fontSize: "calc(clamp(9px, 0.48vw, 12px) * var(--h-scale))", fontWeight: 900, color: C.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          TOL : {formatToleranceRange(param)} {formatUnit(param.unit)}
+          TOL : {formatToleranceRange(param, range)} {formatUnit(param.unit)}
         </span>
       </div>
     </div>
@@ -1055,6 +1073,7 @@ function ForceDepthRow({
   forceIndex,
   depthIndex,
   actuals,
+  ranges,
   plcConnected,
   C,
   onOpenGraph,
@@ -1064,15 +1083,16 @@ function ForceDepthRow({
   forceIndex: number;
   depthIndex: number;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   plcConnected: boolean;
   C: AssemblyTheme;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
 }) {
-  const forceActual = plcConnected ? actuals[forceIndex] ?? parseReq(forceParam.required) : null;
-  const depthActual = plcConnected ? actuals[depthIndex] ?? parseReq(depthParam.required) : null;
-  const forcePass = forceActual !== null && checkPass(forceParam, forceActual);
-  const depthPass = depthActual !== null && checkPass(depthParam, depthActual);
-  const graphSelection = { forceIndex, depthIndex };
+  const forceActual = plcConnected ? actuals[forceIndex] ?? null : null;
+  const depthActual = plcConnected ? actuals[depthIndex] ?? null : null;
+  const forcePass = forceActual !== null && checkPass(forceParam, forceActual, ranges[forceIndex]);
+  const depthPass = depthActual !== null && checkPass(depthParam, depthActual, ranges[depthIndex]);
+  const graphSelection = forceActual !== null && depthActual !== null ? { forceIndex, depthIndex } : null;
 
   return (
     <div
@@ -1092,6 +1112,7 @@ function ForceDepthRow({
           param={forceParam}
           actual={forceActual}
           pass={forcePass}
+          range={ranges[forceIndex]}
           C={C}
           style={{
             border: "none",
@@ -1106,6 +1127,7 @@ function ForceDepthRow({
           param={depthParam}
           actual={depthActual}
           pass={depthPass}
+          range={ranges[depthIndex]}
           C={C}
           style={{
             border: "none",
@@ -1244,9 +1266,10 @@ function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: C
     </div>
   );
 }
-function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph }: {
+function StationMeasurementView({ station, actuals, ranges, plcConnected, C, onOpenGraph }: {
   station: Station;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   plcConnected: boolean;
   C: AssemblyTheme;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
@@ -1298,8 +1321,8 @@ function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph
           const p = params.find((item) => item.name === name);
           if (!p) return null;
           const i = params.indexOf(p);
-          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
-          const pass = actual !== null && checkPass(p, actual);
+          const actual = plcConnected ? actuals[i] ?? null : null;
+          const pass = actual !== null && checkPass(p, actual, ranges[i]);
           if (name === "QR Grade") return <QRTile key={name} C={C} pass={pass} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
           return (
             <MetricReadout
@@ -1307,6 +1330,7 @@ function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph
               param={p}
               actual={actual}
               pass={pass}
+              range={ranges[i]}
               C={C}
               style={{
                 gridColumn: (layoutIndex % 5) + 1,
@@ -1362,6 +1386,7 @@ function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph
             forceIndex={row.forceIndex}
             depthIndex={row.depthIndex}
             actuals={actuals}
+            ranges={ranges}
             plcConnected={plcConnected}
             C={C}
             onOpenGraph={onOpenGraph}
@@ -1381,28 +1406,29 @@ function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph
       <div style={{ minHeight: 0, display: "grid", gridAutoRows: "minmax(0, 1fr)", gap: 6, overflow: "hidden" }}>
         {leftColumn.map((p) => {
           const i = params.indexOf(p);
-          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
-          const pass = actual !== null && checkPass(p, actual);
-          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
+          const actual = plcConnected ? actuals[i] ?? null : null;
+          const pass = actual !== null && checkPass(p, actual, ranges[i]);
+          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} range={ranges[i]} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
         })}
       </div>
       <div style={{ minHeight: 0, display: "grid", gridAutoRows: "minmax(0, 1fr)", gap: 6, overflow: "hidden" }}>
         {rightColumn.map((p) => {
           const i = params.indexOf(p);
-          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
-          const pass = actual !== null && checkPass(p, actual);
-          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
+          const actual = plcConnected ? actuals[i] ?? null : null;
+          const pass = actual !== null && checkPass(p, actual, ranges[i]);
+          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} range={ranges[i]} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
         })}
       </div>
     </div>
   );
 }
 
-function AssemblyStationPanel({ station, done, loading, actuals, plcConnected, C }: {
+function AssemblyStationPanel({ station, done, loading, actuals, ranges, plcConnected, C }: {
   station: Station;
   done: boolean;
   loading: boolean;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   plcConnected: boolean;
   C: AssemblyTheme;
 }) {
@@ -1445,7 +1471,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, plcConnected, C
         {station.params.length === 0 ? (
           <div style={{ ...MONO, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: fs.lg, fontWeight: 800 }}>No parameters</div>
         ) : (
-          <StationMeasurementView station={station} actuals={actuals} plcConnected={plcConnected} C={C} onOpenGraph={setSelectedGraph} />
+          <StationMeasurementView station={station} actuals={actuals} ranges={ranges} plcConnected={plcConnected} C={C} onOpenGraph={setSelectedGraph} />
         )}
 
       </div>
@@ -1819,13 +1845,13 @@ function AssemblySvgCard({
   );
 }
 
-function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actuals: Record<number, number>; plcConnected: boolean }) {
+function AssemblyShaftSvg({ C, actuals, ranges, plcConnected }: { C: AssemblyTheme; actuals: Record<number, number>; ranges: Record<number, LiveRange>; plcConnected: boolean }) {
   const line = C.text;
-  const dowelLength = inspectionSvgValues("Dowel Length", actuals, plcConnected);
-  const leftOverallDiameter = inspectionSvgValues("Left Overall Diameter", actuals, plcConnected);
-  const rightOverallDiameter = inspectionSvgValues("Right Overall Diameter", actuals, plcConnected);
-  const leftMillingHeight = inspectionSvgValues("Left Milling Height", actuals, plcConnected);
-  const rightMillingHeight = inspectionSvgValues("Right Milling Height", actuals, plcConnected);
+  const dowelLength = inspectionSvgValues("Dowel Length", actuals, ranges, plcConnected);
+  const leftOverallDiameter = inspectionSvgValues("Left Overall Diameter", actuals, ranges, plcConnected);
+  const rightOverallDiameter = inspectionSvgValues("Right Overall Diameter", actuals, ranges, plcConnected);
+  const leftMillingHeight = inspectionSvgValues("Left Milling Height", actuals, ranges, plcConnected);
+  const rightMillingHeight = inspectionSvgValues("Right Milling Height", actuals, ranges, plcConnected);
 
   return (
     <svg
@@ -2070,11 +2096,13 @@ function AssemblyDiagramCard({
   C,
   onOpen,
   actuals,
+  ranges,
   plcConnected,
 }: {
   C: AssemblyTheme;
   onOpen: () => void;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   plcConnected: boolean;
 }) {
   return (
@@ -2088,7 +2116,7 @@ function AssemblyDiagramCard({
       background: C.imageBg,
       overflow: "hidden",
     }}>
-      <AssemblyShaftSvg C={C} actuals={actuals} plcConnected={plcConnected} />
+      <AssemblyShaftSvg C={C} actuals={actuals} ranges={ranges} plcConnected={plcConnected} />
       <div style={{
         ...MONO,
         position: "absolute",
@@ -2137,11 +2165,13 @@ function AssemblyDiagramModal({
   C,
   onClose,
   actuals,
+  ranges,
   plcConnected,
 }: {
   C: AssemblyTheme;
   onClose: () => void;
   actuals: Record<number, number>;
+  ranges: Record<number, LiveRange>;
   plcConnected: boolean;
 }) {
   return (
@@ -2209,7 +2239,7 @@ function AssemblyDiagramModal({
           </button>
         </div>
         <div style={{ minHeight: 0, padding: 16, background: C.imageBg }}>
-          <AssemblyShaftSvg C={C} actuals={actuals} plcConnected={plcConnected} />
+          <AssemblyShaftSvg C={C} actuals={actuals} ranges={ranges} plcConnected={plcConnected} />
         </div>
       </div>
     </div>
@@ -2223,6 +2253,7 @@ export default function Dashboard() {
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [liveActuals, setLiveActuals] = useState<LiveActuals>({});
+  const [liveRanges, setLiveRanges] = useState<LiveRanges>({});
   const [totalInspected, setTotalInspected] = useState(0);
   const [okCount, setOkCount] = useState(0);
   const [ngCount, setNgCount] = useState(0);
@@ -2288,6 +2319,7 @@ export default function Dashboard() {
         setPlcConnected(connected);
         setPlcErrorMessage(apiMessage(payload));
         setLiveActuals(connected ? normalizeApiActuals(payload.actuals) : {});
+        setLiveRanges(connected ? normalizeApiRanges(payload.ranges) : {});
         setCompletedIds(connected ? completedStationIdsFromApi(payload, PARAM_STATIONS) : []);
         setProcessingId(null);
         setTotalInspected(payload.summary?.total ?? payload.common?.partsProcessed ?? 0);
@@ -2303,6 +2335,7 @@ export default function Dashboard() {
         setPlcConnected(false);
         setPlcErrorMessage(message);
         setLiveActuals({});
+        setLiveRanges({});
         setCompletedIds([]);
         setProcessingId(null);
         setTotalInspected(0);
@@ -2539,7 +2572,7 @@ export default function Dashboard() {
         .run-btn:hover{background:#e55800 !important}
         .run-btn:active{transform:scale(.97)}
       `}</style>
-      {diagramOpen && <AssemblyDiagramModal C={C} actuals={liveActuals[11] || {}} plcConnected={plcConnected} onClose={() => setDiagramOpen(false)} />}
+      {diagramOpen && <AssemblyDiagramModal C={C} actuals={liveActuals[11] || {}} ranges={liveRanges[11] || {}} plcConnected={plcConnected} onClose={() => setDiagramOpen(false)} />}
 
       <div className="dashboard-content" style={{ display: "flex" }}>
 
@@ -2588,7 +2621,7 @@ export default function Dashboard() {
 
           {/* Shaft diagram */}
           <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, background: C.imageBg, overflow: "hidden" }}>
-            <AssemblyDiagramCard C={C} actuals={liveActuals[11] || {}} plcConnected={plcConnected} onOpen={() => setDiagramOpen(true)} />
+            <AssemblyDiagramCard C={C} actuals={liveActuals[11] || {}} ranges={liveRanges[11] || {}} plcConnected={plcConnected} onOpen={() => setDiagramOpen(true)} />
           </div>
 
           <div className="assembly-left-summary">
@@ -2612,7 +2645,7 @@ export default function Dashboard() {
             ) : (
               activeStations.map(st => (
                 <div key={st.id} className={`station-cell ${st.id === 11 ? "inspection-station-cell" : ""}`}>
-                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} plcConnected={plcConnected} C={C} />
+                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} ranges={liveRanges[st.id] || {}} plcConnected={plcConnected} C={C} />
                 </div>
               ))
             )}

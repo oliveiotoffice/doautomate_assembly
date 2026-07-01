@@ -31,6 +31,10 @@ function randFloat(min, max, decimals = 3) {
   return Number((Math.random() * (max - min) + min).toFixed(decimals));
 }
 
+function rangeMidpoint(spec, decimals = 3) {
+  return Number(((Number(spec.min) + Number(spec.max)) / 2).toFixed(decimals));
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -53,7 +57,7 @@ function makeDefaultValues() {
   };
 
   FLOAT_FIELDS.forEach(([key, , , spec]) => {
-    values.floats[key] = { ...spec };
+    values.floats[key] = { ...spec, actual: rangeMidpoint(spec) };
   });
   return values;
 }
@@ -104,10 +108,11 @@ function normalizeValues(input = {}) {
   values.completedStatus = toNumber(input.completedStatus, values.completedStatus);
 
   FLOAT_FIELDS.forEach(([key, , , spec]) => {
+    const defaultActual = rangeMidpoint(spec);
     values.floats[key] = {
       min: toNumber(input.floats?.[key]?.min, spec.min),
       max: toNumber(input.floats?.[key]?.max, spec.max),
-      actual: toNumber(input.floats?.[key]?.actual, spec.actual),
+      actual: toNumber(input.floats?.[key]?.actual, defaultActual),
     };
   });
   return values;
@@ -172,27 +177,63 @@ function renderUi(config) {
   <title>Assembly PLC Write Panel</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; background: #eef3f8; color: #102033; }
-    header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: #fff; border-bottom: 1px solid #cfd8e3; position: sticky; top: 0; z-index: 2; }
-    h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
-    main { padding: 16px; display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; }
-    section { background: #fff; border: 1px solid #ccd6e2; border-radius: 8px; overflow: hidden; }
-    h2 { margin: 0; padding: 10px 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; background: #e6edf4; border-bottom: 1px solid #ccd6e2; }
-    .body { padding: 12px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
-    label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; color: #34465c; }
-    input, select { width: 100%; height: 36px; border: 1px solid #b9c5d4; border-radius: 6px; padding: 0 10px; font-size: 14px; }
-    button { height: 38px; border: 0; border-radius: 7px; padding: 0 14px; font-size: 14px; font-weight: 800; cursor: pointer; }
-    #submit { background: #12853c; color: #fff; }
+    :root {
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --panel-soft: #f7f9fc;
+      --head: #172033;
+      --line: #c9d4e2;
+      --line-strong: #9fb0c4;
+      --text: #102033;
+      --muted: #64748b;
+      --accent: #ff6200;
+      --blue: #0f4c8a;
+      --green: #12853c;
+      --red: #b91c1c;
+    }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; background: var(--head); color: #fff; border-bottom: 3px solid var(--accent); position: sticky; top: 0; z-index: 2; box-shadow: 0 8px 24px rgba(15, 23, 42, .16); }
+    h1 { margin: 0; font-size: 18px; letter-spacing: .06em; text-transform: uppercase; }
+    main { padding: 16px; display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 16px; align-items: start; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(15, 23, 42, .07); }
+    h2 { margin: 0; padding: 11px 14px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; background: #e6edf4; border-bottom: 1px solid var(--line); color: #172033; }
+    .body { padding: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    label { display: grid; gap: 6px; min-width: 0; font-size: 12px; font-weight: 800; color: #34465c; text-transform: uppercase; letter-spacing: .03em; }
+    input, select {
+      width: 100%;
+      min-width: 0;
+      height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 0 11px;
+      background: #fff;
+      color: #0f172a;
+      font-size: 15px;
+      font-weight: 800;
+      outline: none;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, .06);
+    }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 98, 0, .16); }
+    input::placeholder { color: #94a3b8; }
+    input[type="checkbox"] { width: 18px; height: 18px; padding: 0; box-shadow: none; accent-color: var(--green); }
+    button { height: 42px; border: 0; border-radius: 7px; padding: 0 15px; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; cursor: pointer; transition: transform .12s ease, filter .12s ease; }
+    button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    #submit { background: var(--green); color: #fff; min-width: 150px; }
     #randomize { background: #24364c; color: #fff; }
-    #resetAll { background: #b91c1c; color: #fff; }
-    .station-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
-    .station-actions button { background: #0f4c8a; color: #fff; }
-    .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+    #resetAll { background: var(--red); color: #fff; }
+    .station-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .station-actions button { background: var(--blue); color: #fff; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 2px; }
     .span2 { grid-column: 1 / -1; }
-    .muted, #status { color: #64748b; font-size: 12px; font-weight: 700; }
-    .float-row { display: grid; grid-template-columns: 1.2fr repeat(3, minmax(86px, 1fr)); gap: 8px; align-items: end; padding: 8px; border: 1px solid #d7e0ea; border-radius: 6px; background: #f8fafc; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } .float-row { grid-template-columns: 1fr; } }
+    .muted { color: #9fb0c4; font-size: 12px; font-weight: 700; margin-top: 4px; }
+    #status { min-height: 34px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); color: var(--muted); font-size: 12px; font-weight: 900; }
+    .check-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); text-transform: none; letter-spacing: 0; }
+    #floatFields { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+    .float-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) repeat(3, minmax(90px, 1fr)); gap: 10px; align-items: end; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+    .float-title { color: #172033; font-size: 13px; font-weight: 900; line-height: 1.25; }
+    .float-row input { height: 38px; font-size: 14px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } header { align-items: flex-start; flex-direction: column; } #submit { width: 100%; } .float-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -218,7 +259,7 @@ function renderUi(config) {
         <label>Completed Status<input id="completedStatus" type="number" step="1" min="0" max="5" /></label>
         <label>QR Grade<input id="qrGrade" maxlength="20" /></label>
         <label class="span2">Active Alarms<input id="activeAlarms" maxlength="20" /></label>
-        <label class="span2"><span>Auto unique component number after common write</span><input id="autoComponentNo" type="checkbox" /></label>
+        <label class="span2 check-label"><span>Auto unique component number after common write</span><input id="autoComponentNo" type="checkbox" /></label>
         <div class="actions span2">
           <button id="randomize" type="button">Randomize Actuals</button>
           <button id="resetAll" type="button">Reset All 0</button>
@@ -254,7 +295,7 @@ function renderUi(config) {
       $("autoComponentNo").checked = state.autoComponentNo;
       $("floatFields").innerHTML = meta.floats.map(([key, label, address]) => {
         const value = state.floats[key];
-        return '<div class="float-row"><strong>' + label + '<br><span class="muted">D' + address + '-D' + (address + 5) + '</span></strong><label>Min<input data-float="' + key + '" data-part="min" type="number" step="0.001" value="' + value.min + '" /></label><label>Max<input data-float="' + key + '" data-part="max" type="number" step="0.001" value="' + value.max + '" /></label><label>Actual<input data-float="' + key + '" data-part="actual" type="number" step="0.001" value="' + value.actual + '" /></label></div>';
+        return '<div class="float-row"><div class="float-title">' + label + '<br><span class="muted">D' + address + '-D' + (address + 5) + '</span></div><label>Min<input data-float="' + key + '" data-part="min" type="number" step="0.001" value="' + value.min + '" /></label><label>Max<input data-float="' + key + '" data-part="max" type="number" step="0.001" value="' + value.max + '" /></label><label>Actual<input data-float="' + key + '" data-part="actual" type="number" step="0.001" value="' + value.actual + '" /></label></div>';
       }).join("");
     }
     function collectForm() {
