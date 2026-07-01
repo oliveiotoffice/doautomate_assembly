@@ -101,78 +101,6 @@ function completedStationIdsFromApi(payload: AssemblyApiPayload | null, stations
 }
 
 
-function PlcDisconnectedBody({ message, C }: { message: string; C: AssemblyTheme }) {
-  return (
-    <div style={{
-      flex: "1 1 auto",
-      minHeight: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "24px",
-      background: C.bg,
-    }}>
-      <div role="alert" style={{
-        width: "min(720px, 92vw)",
-        border: `1.5px solid ${C.ngBorder}`,
-        borderLeft: `6px solid ${C.ng}`,
-        borderRadius: 8,
-        background: C.panel,
-        boxShadow: "0 18px 44px rgba(15,23,42,0.18)",
-        padding: "22px 24px",
-        display: "grid",
-        gridTemplateColumns: "auto minmax(0,1fr)",
-        gap: 16,
-        alignItems: "center",
-      }}>
-        <span style={{
-          width: 18,
-          height: 18,
-          borderRadius: "50%",
-          background: C.ng,
-          boxShadow: `0 0 0 7px ${C.ngSoft}`,
-          animation: "dash-pulse 1s ease-in-out infinite",
-        }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ ...MONO, fontSize: fs.xl, fontWeight: 900, color: C.ng, textTransform: "uppercase" }}>
-            PLC communication alarm
-          </div>
-          <div style={{ ...MONO, marginTop: 6, fontSize: fs.md, fontWeight: 800, color: C.text }}>
-            PLC is not communicating. Check PLC power, Ethernet cable, IP/port, and MC protocol connection.
-          </div>
-          {message && (
-            <div style={{ ...MONO, marginTop: 7, fontSize: fs.sm, fontWeight: 700, color: C.textMid, overflowWrap: "anywhere" }}>
-              {message}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-function PlcDisconnectedBanner({ message, C }: { message: string; C: AssemblyTheme }) {
-  return (
-    <div style={{
-      ...MONO,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      padding: "8px 12px",
-      background: C.ngSoft,
-      borderBottom: `1px solid ${C.ngBorder}`,
-      color: C.ng,
-      fontSize: fs.sm,
-      fontWeight: 900,
-      textTransform: "uppercase",
-      flexShrink: 0,
-    }}>
-      <ShieldAlert size={17} strokeWidth={2.8} />
-      PLC Not Connected{message ? ` - ${message}` : ""}
-    </div>
-  );
-}
-
 type AssemblyTheme = {
   bg: string;
   panel: string;
@@ -448,6 +376,22 @@ function formatToleranceRange(param: Param): string {
   const low = req + lo;
   const high = req + hi;
   return `${low.toFixed(decimals)} - ${high.toFixed(decimals)}`;
+}
+
+function inspectionSvgValues(name: string, actuals: Record<number, number>, plcConnected: boolean) {
+  const param = INSPECTION_PARAMS.find((item) => item.name === name);
+  if (!param || !plcConnected) return { high: "-", low: "-", value: "-" };
+
+  const index = INSPECTION_PARAMS.indexOf(param);
+  const req = parseReq(param.required);
+  const { lo, hi } = getTol(param.tolerance);
+  const actual = actuals[index] ?? req;
+
+  return {
+    high: String(req + hi),
+    low: String(req + lo),
+    value: String(actual),
+  };
 }
 
 function formatUnit(unit: string): string {
@@ -867,14 +811,15 @@ function MetricReadout({
   onOpenGraph,
 }: {
   param: Param;
-  actual: number;
+  actual: number | null;
   pass: boolean;
   C: AssemblyTheme;
   style?: CSSProperties;
   graphPair?: ForceDepthSelection | null;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
 }) {
-  const tone = pass ? C.ok : C.ng;
+  const hasActual = typeof actual === "number";
+  const tone = !hasActual ? C.muted : pass ? C.ok : C.ng;
   const side = paramSide(param.name);
   const label = metricLabel(param.name);
   const decimals = param.unit === "kN" ? 2 : 3;
@@ -925,8 +870,8 @@ function MetricReadout({
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          <span style={{ ...MONO, minWidth: 35, textAlign: "center", borderRadius: 3, padding: "3px 6px", background: pass ? C.okSoft : C.ngSoft, border: `1px solid ${tone}`, color: tone, fontSize: "clamp(7px, min(3.9cqw, .86vh), 9px)", fontWeight: 900 }}>
-            {pass ? "OK" : "NG"}
+          <span style={{ ...MONO, minWidth: 35, textAlign: "center", borderRadius: 3, padding: "3px 6px", background: !hasActual ? C.panelAlt : pass ? C.okSoft : C.ngSoft, border: `1px solid ${tone}`, color: tone, fontSize: "clamp(7px, min(3.9cqw, .86vh), 9px)", fontWeight: 900 }}>
+            {!hasActual ? "-" : pass ? "OK" : "NG"}
           </span>
         </div>
       </div>
@@ -934,7 +879,7 @@ function MetricReadout({
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "stretch", gap: 4, minWidth: 0, padding: "4px 6px", background: valueBg }}>
         <div style={{ minWidth: 0, minHeight: 0, display: "flex", alignItems: "baseline", gap: 5, paddingLeft: 6, overflow: "hidden" }}>
           <span style={{ ...MONO, minWidth: 0, alignSelf: "center", fontSize: "calc(clamp(28px, min(13.5cqw, 3.35dvh), 46px) * var(--h-scale))", fontWeight: 900, color: C.info, lineHeight: 0.9, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", transformOrigin: "left center" }}>
-            {actual.toFixed(decimals)}
+            {hasActual ? actual.toFixed(decimals) : "-"}
           </span>
           <span style={{ ...MONO, flexShrink: 0, fontSize: "calc(clamp(12px, min(5.8cqw, 1.35dvh), 16px) * var(--h-scale))", fontWeight: 900, color: C.textMid, lineHeight: 1, textTransform: "lowercase", whiteSpace: "nowrap" }}>
             {formatUnit(param.unit)}
@@ -1106,6 +1051,7 @@ function ForceDepthRow({
   forceIndex,
   depthIndex,
   actuals,
+  plcConnected,
   C,
   onOpenGraph,
 }: {
@@ -1114,13 +1060,14 @@ function ForceDepthRow({
   forceIndex: number;
   depthIndex: number;
   actuals: Record<number, number>;
+  plcConnected: boolean;
   C: AssemblyTheme;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
 }) {
-  const forceActual = actuals[forceIndex] ?? parseReq(forceParam.required);
-  const depthActual = actuals[depthIndex] ?? parseReq(depthParam.required);
-  const forcePass = checkPass(forceParam, forceActual);
-  const depthPass = checkPass(depthParam, depthActual);
+  const forceActual = plcConnected ? actuals[forceIndex] ?? parseReq(forceParam.required) : null;
+  const depthActual = plcConnected ? actuals[depthIndex] ?? parseReq(depthParam.required) : null;
+  const forcePass = forceActual !== null && checkPass(forceParam, forceActual);
+  const depthPass = depthActual !== null && checkPass(depthParam, depthActual);
   const graphSelection = { forceIndex, depthIndex };
 
   return (
@@ -1148,7 +1095,7 @@ function ForceDepthRow({
             borderTop: `3px solid ${forcePass ? C.ok : C.ng}`,
             borderRadius: 0,
           }}
-          graphPair={graphSelection}
+          graphPair={plcConnected ? graphSelection : null}
           onOpenGraph={onOpenGraph}
         />
         <MetricReadout
@@ -1161,7 +1108,7 @@ function ForceDepthRow({
             borderTop: `3px solid ${depthPass ? C.ok : C.ng}`,
             borderRadius: 0,
           }}
-          graphPair={graphSelection}
+          graphPair={plcConnected ? graphSelection : null}
           onOpenGraph={onOpenGraph}
         />
       </div>
@@ -1293,9 +1240,10 @@ function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: C
     </div>
   );
 }
-function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
+function StationMeasurementView({ station, actuals, plcConnected, C, onOpenGraph }: {
   station: Station;
   actuals: Record<number, number>;
+  plcConnected: boolean;
   C: AssemblyTheme;
   onOpenGraph?: (selection: ForceDepthSelection) => void;
 }) {
@@ -1346,8 +1294,8 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
           const p = params.find((item) => item.name === name);
           if (!p) return null;
           const i = params.indexOf(p);
-          const actual = actuals[i] ?? parseReq(p.required);
-          const pass = checkPass(p, actual);
+          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
+          const pass = actual !== null && checkPass(p, actual);
           if (name === "QR Grade") return <QRTile key={name} C={C} pass={pass} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
           return (
             <MetricReadout
@@ -1410,6 +1358,7 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
             forceIndex={row.forceIndex}
             depthIndex={row.depthIndex}
             actuals={actuals}
+            plcConnected={plcConnected}
             C={C}
             onOpenGraph={onOpenGraph}
           />
@@ -1428,28 +1377,29 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
       <div style={{ minHeight: 0, display: "grid", gridAutoRows: "minmax(0, 1fr)", gap: 6, overflow: "hidden" }}>
         {leftColumn.map((p) => {
           const i = params.indexOf(p);
-          const actual = actuals[i] ?? parseReq(p.required);
-          const pass = checkPass(p, actual);
-          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={getForceDepthPair(params, i)} onOpenGraph={onOpenGraph} />;
+          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
+          const pass = actual !== null && checkPass(p, actual);
+          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
         })}
       </div>
       <div style={{ minHeight: 0, display: "grid", gridAutoRows: "minmax(0, 1fr)", gap: 6, overflow: "hidden" }}>
         {rightColumn.map((p) => {
           const i = params.indexOf(p);
-          const actual = actuals[i] ?? parseReq(p.required);
-          const pass = checkPass(p, actual);
-          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={getForceDepthPair(params, i)} onOpenGraph={onOpenGraph} />;
+          const actual = plcConnected ? actuals[i] ?? parseReq(p.required) : null;
+          const pass = actual !== null && checkPass(p, actual);
+          return <MetricReadout key={p.name} param={p} actual={actual} pass={pass} C={C} graphPair={plcConnected ? getForceDepthPair(params, i) : null} onOpenGraph={onOpenGraph} />;
         })}
       </div>
     </div>
   );
 }
 
-function AssemblyStationPanel({ station, done, loading, actuals, C }: {
+function AssemblyStationPanel({ station, done, loading, actuals, plcConnected, C }: {
   station: Station;
   done: boolean;
   loading: boolean;
   actuals: Record<number, number>;
+  plcConnected: boolean;
   C: AssemblyTheme;
 }) {
   const [selectedGraph, setSelectedGraph] = useState<ForceDepthSelection | null>(null);
@@ -1491,7 +1441,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, C }: {
       {station.params.length === 0 ? (
         <div style={{ ...MONO, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: fs.lg, fontWeight: 800 }}>No parameters</div>
       ) : (
-        <StationMeasurementView station={station} actuals={actuals} C={C} onOpenGraph={setSelectedGraph} />
+          <StationMeasurementView station={station} actuals={actuals} plcConnected={plcConnected} C={C} onOpenGraph={setSelectedGraph} />
       )}
 
       </div>
@@ -1506,6 +1456,8 @@ function RunSummary({
   isLoading,
   cycleTime,
   activeAlarms,
+  plcConnected,
+  plcErrorMessage,
   C,
 }: {
   totalInspected: number;
@@ -1514,6 +1466,8 @@ function RunSummary({
   isLoading: boolean;
   cycleTime: number | null;
   activeAlarms: string;
+  plcConnected: boolean;
+  plcErrorMessage: string;
   C: AssemblyTheme;
 }) {
   const partsProcessed = totalInspected;
@@ -1600,6 +1554,36 @@ function RunSummary({
         overflow: "hidden",
       }}
     >
+      {!plcConnected && (
+        <div
+          role="alert"
+          style={{
+            ...MONO,
+            display: "grid",
+            gridTemplateColumns: "auto minmax(0, 1fr)",
+            alignItems: "center",
+            gap: 7,
+            marginBottom: 7,
+            padding: "6px 8px",
+            borderRadius: 4,
+            border: `1px solid ${C.ngBorder}`,
+            borderLeft: `4px solid ${C.ng}`,
+            background: C.ngSoft,
+            color: C.ng,
+            fontSize: "clamp(9px, min(0.68vw, 1vh), 12px)",
+            fontWeight: 900,
+            lineHeight: 1.15,
+            textTransform: "uppercase",
+            flexShrink: 0,
+          }}
+        >
+          <ShieldAlert size={15} strokeWidth={2.8} />
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            PLC Not Connected{plcErrorMessage ? ` - ${plcErrorMessage}` : ""}
+          </span>
+        </div>
+      )}
+
       {/* HEADER */}
       <div
         style={{
@@ -1828,8 +1812,13 @@ function AssemblySvgCard({
   );
 }
 
-function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
+function AssemblyShaftSvg({ C, actuals, plcConnected }: { C: AssemblyTheme; actuals: Record<number, number>; plcConnected: boolean }) {
   const line = C.text;
+  const dowelLength = inspectionSvgValues("Dowel Length", actuals, plcConnected);
+  const leftOverallDiameter = inspectionSvgValues("Left Overall Diameter", actuals, plcConnected);
+  const rightOverallDiameter = inspectionSvgValues("Right Overall Diameter", actuals, plcConnected);
+  const leftMillingHeight = inspectionSvgValues("Left Milling Height", actuals, plcConnected);
+  const rightMillingHeight = inspectionSvgValues("Right Milling Height", actuals, plcConnected);
 
   return (
     <svg
@@ -1915,9 +1904,9 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
         x={500}
         y={295}
         label="Dowel Length"
-        high="498.3"
-        low="498.1"
-        value="498.2"
+        high={dowelLength.high}
+        low={dowelLength.low}
+        value={dowelLength.value}
         C={C}
       />
 
@@ -1932,9 +1921,9 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
         x={160}
         y={230}
         label="Overall Dia(Left)"
-        high="34.01"
-        low="34.5"
-        value="34.8"
+        high={leftOverallDiameter.high}
+        low={leftOverallDiameter.low}
+        value={leftOverallDiameter.value}
         C={C}
       />
 
@@ -1950,9 +1939,9 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
         x={835}
         y={15}
         label="Overall Dia(right)"
-        high="34.01"
-        low="34.5"
-        value="34.8"
+        high={rightOverallDiameter.high}
+        low={rightOverallDiameter.low}
+        value={rightOverallDiameter.value}
         C={C}
       />
 
@@ -1966,9 +1955,9 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
         x={360}
         y={15}
         label="Milling height(left)"
-        high="34.01"
-        low="34.5"
-        value="34.8"
+        high={leftMillingHeight.high}
+        low={leftMillingHeight.low}
+        value={leftMillingHeight.value}
         C={C}
       />
 
@@ -1984,9 +1973,9 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
         x={700}
         y={230}
         label="Milling height(right)"
-        high="34.01"
-        low="34.5"
-        value="34.8"
+        high={rightMillingHeight.high}
+        low={rightMillingHeight.low}
+        value={rightMillingHeight.value}
         C={C}
       />
 
@@ -2071,9 +2060,13 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
 function AssemblyDiagramCard({
   C,
   onOpen,
+  actuals,
+  plcConnected,
 }: {
   C: AssemblyTheme;
   onOpen: () => void;
+  actuals: Record<number, number>;
+  plcConnected: boolean;
 }) {
   return (
     <div style={{
@@ -2123,7 +2116,7 @@ function AssemblyDiagramCard({
         </button>
       </div>
       <div style={{ minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", background: C.imageBg }}>
-        <AssemblyShaftSvg C={C} />
+        <AssemblyShaftSvg C={C} actuals={actuals} plcConnected={plcConnected} />
       </div>
     </div>
   );
@@ -2132,9 +2125,13 @@ function AssemblyDiagramCard({
 function AssemblyDiagramModal({
   C,
   onClose,
+  actuals,
+  plcConnected,
 }: {
   C: AssemblyTheme;
   onClose: () => void;
+  actuals: Record<number, number>;
+  plcConnected: boolean;
 }) {
   return (
     <div
@@ -2201,7 +2198,7 @@ function AssemblyDiagramModal({
           </button>
         </div>
         <div style={{ minHeight: 0, padding: 16, background: C.imageBg }}>
-          <AssemblyShaftSvg C={C} />
+          <AssemblyShaftSvg C={C} actuals={actuals} plcConnected={plcConnected} />
         </div>
       </div>
     </div>
@@ -2288,7 +2285,7 @@ export default function Dashboard() {
         setCycleTime(typeof payload.common?.cycleTime?.actual === "number" ? payload.common.cycleTime.actual : null);
         setActiveAlarms(payload.common?.activeAlarms || "");
         setComponentNo(String(payload.componentNo || payload.common?.componentNo || "-"));
-        setModelLabel(String(payload.modelNumber || payload.modelNo || payload.common?.modelNo || "-"));
+        setModelLabel(String(payload.modelNo || payload.common?.modelNo || payload.modelNumber || "-"));
       } catch (error) {
         if (!alive) return;
         const message = error instanceof Error ? error.message : "PLC not connected";
@@ -2357,8 +2354,6 @@ export default function Dashboard() {
   return (
     <div className="dashboard-shell assembly-dashboard" style={{ ...MONO, "--h-scale": heightScale, width: "100%", height: "100dvh", minHeight: 0, overflow: "hidden", background: C.bg, transition: "background 0.25s ease, color 0.25s ease", display: "flex", flexDirection: "column" } as CSSProperties}>
       <Header name="Assembly SCADA" role="Assembly" />
-      {!plcConnected && <PlcDisconnectedBanner message={plcErrorMessage} C={C} />}
-      {!plcConnected && <PlcDisconnectedBody message={plcErrorMessage} C={C} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
         .assembly-dashboard {
@@ -2533,9 +2528,9 @@ export default function Dashboard() {
         .run-btn:hover{background:#e55800 !important}
         .run-btn:active{transform:scale(.97)}
       `}</style>
-      {diagramOpen && <AssemblyDiagramModal C={C} onClose={() => setDiagramOpen(false)} />}
+      {diagramOpen && <AssemblyDiagramModal C={C} actuals={liveActuals[11] || {}} plcConnected={plcConnected} onClose={() => setDiagramOpen(false)} />}
 
-      <div className="dashboard-content" style={{ display: plcConnected ? "flex" : "none" }}>
+      <div className="dashboard-content" style={{ display: "flex" }}>
 
         {/* â•â• LEFT â•â• */}
         <div className="dashboard-left">
@@ -2582,11 +2577,11 @@ export default function Dashboard() {
 
           {/* Shaft diagram */}
           <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, background: C.imageBg, overflow: "hidden" }}>
-            <AssemblyDiagramCard C={C} onOpen={() => setDiagramOpen(true)} />
+            <AssemblyDiagramCard C={C} actuals={liveActuals[11] || {}} plcConnected={plcConnected} onOpen={() => setDiagramOpen(true)} />
           </div>
 
           <div className="assembly-left-summary">
-            <RunSummary totalInspected={totalInspected} okCount={okCount} ngCount={ngCount} isLoading={isLoading} cycleTime={cycleTime} activeAlarms={activeAlarms} C={C} />
+            <RunSummary totalInspected={totalInspected} okCount={okCount} ngCount={ngCount} isLoading={isLoading} cycleTime={cycleTime} activeAlarms={activeAlarms} plcConnected={plcConnected} plcErrorMessage={plcErrorMessage} C={C} />
           </div>
         </div>
 
@@ -2606,7 +2601,7 @@ export default function Dashboard() {
             ) : (
               activeStations.map(st => (
                 <div key={st.id} className={`station-cell ${st.id === 11 ? "inspection-station-cell" : ""}`}>
-                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} C={C} />
+                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} plcConnected={plcConnected} C={C} />
                 </div>
               ))
             )}

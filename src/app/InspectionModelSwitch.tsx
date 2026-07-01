@@ -34,12 +34,12 @@ export default function InspectionModelSwitch() {
     const refresh = async () => {
       try {
         const response = await fetch("/api/assembly/current", { cache: "no-store" });
-        if (!response.ok) throw new Error("Assembly API request failed");
+        if (!response.ok) return;
         const data: AssemblySwitchPayload = await response.json();
         const nextModelNo = normalizeModelNo(data.modelNo || data.common?.modelNo || data.modelNumber);
         if (alive && nextModelNo && nextModelNo !== "0") setModelNo(nextModelNo);
       } catch (error) {
-        console.error("Assembly model refresh failed:", error);
+        if (process.env.NODE_ENV === "development") console.debug("Assembly model refresh skipped:", error);
       }
     };
 

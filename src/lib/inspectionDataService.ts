@@ -24,6 +24,7 @@ export type InspectionRtc = {
 
 export type InspectionCommon = {
   shift: number | string;
+  shaftId?: string | number;
   operator: string;
   modelNo: InspectionModelNo;
   componentNo: string;
@@ -223,142 +224,6 @@ function summarizePins(statuses: PlcPinStatus[]) {
     ng: statuses.filter(status => status === 3 || status === 5).length,
   };
 }
-
-function mockStatus(index: number, seed: number): PlcPinStatus {
-  const value = (seed * 17 + index * 29) % 19;
-  if (value === 0) return 5;
-  if (value === 1) return 2;
-  return 4;
-}
-
-function mockStatuses(count: number, seed: number): PlcPinStatus[] {
-  return Array.from({ length: count }, (_, index) => mockStatus(index, seed));
-}
-
-function mockActual(base: number, offset: number, decimals = 3) {
-  const wobble = Math.sin(Date.now() / 9000 + offset) * 0.006;
-  return Number((base + wobble).toFixed(decimals));
-}
-
-function boolSummary(statuses: PlcPinStatus[]) {
-  return {
-    total: statuses.filter(status => status !== null && status !== 0).length,
-    ok: statuses.filter(status => status === 4).length,
-    ng: statuses.filter(status => status === 3 || status === 5).length,
-  };
-}
-
-function numericPass(value: number | null, req: number, tol: number) {
-  return value !== null && value >= req - tol && value <= req + tol;
-}
-
-function makeMockInspectionData(modelNo: InspectionModelNo): InspectionApiPayload {
-  const seed = Number(modelNo.replace(/\D/g, "").slice(-3)) || 865;
-  const holes15 = mockStatuses(15, seed);
-  const holes3 = mockStatuses(3, seed + 50);
-  const special = mockStatuses(3, seed + 100);
-
-  const actuals: InspectionValueMap = {
-    1: {
-      0: mockActual(35.012, 0),
-      1: mockActual(35.016, 1),
-      2: mockActual(466.050, 2),
-      3: mockActual(26.902, 3),
-      4: mockActual(26.908, 4),
-      5: mockActual(12.214, 5),
-    },
-    2: {
-      0: 3.001,
-      1: 3.004,
-      2: 3.006,
-    },
-    3: {},
-    5: {
-      0: mockActual(14.501, 6),
-      1: mockActual(14.506, 7),
-    },
-    6: {
-      0: mockActual(4.982, 8),
-      1: mockActual(4.986, 9),
-      2: mockActual(6.304, 10),
-      3: mockActual(6.308, 11),
-    },
-  };
-
-  const station1Results = [
-    numericPass(actuals[1][0], 35, 0.025),
-    numericPass(actuals[1][1], 35, 0.025),
-    numericPass(actuals[1][2], 466, 0.1),
-    numericPass(actuals[1][3], 26.9, 0.1),
-    numericPass(actuals[1][4], 26.9, 0.1),
-    numericPass(actuals[1][5], 12.2, 0.025),
-    true,
-  ];
-  const station56Results = [
-    numericPass(actuals[5][0], 14.5, 0.013),
-    numericPass(actuals[5][1], 14.5, 0.013),
-    numericPass(actuals[6][0], 4.98, 0.013),
-    numericPass(actuals[6][1], 4.98, 0.013),
-    numericPass(actuals[6][2], 6.3, 0.013),
-    numericPass(actuals[6][3], 6.3, 0.013),
-  ];
-  const booleanCounts = boolSummary([...holes15, ...holes3, ...special, 4, 4, 4, 4]);
-  const numericResults = [...station1Results, ...station56Results];
-  const numericOk = numericResults.filter(Boolean).length;
-  const numericNg = numericResults.length - numericOk;
-
-  return {
-    header: {
-      shaftNumber: `SH-${modelNo}-${String(seed).padStart(3, "0")}`,
-      operatorId: "MOCK-OP",
-      componentNo: `Co-${modelNo}`,
-      modelNumber: `Shaft-${modelNo}`,
-    },
-    common: {
-      shift: 1,
-      operator: "MOCK-OP",
-      modelNo,
-      componentNo: `Co-${modelNo}`,
-      rtc: {
-        year: new Date().getFullYear(),
-        month: new Date().getMonth() + 1,
-        day: new Date().getDate(),
-        hour: new Date().getHours(),
-        minute: new Date().getMinutes(),
-        second: new Date().getSeconds(),
-      },
-    },
-    componentNo: `Co-${modelNo}`,
-    modelNo,
-    modelNumber: `Shaft-${modelNo}`,
-    actuals,
-    pinStatuses: {
-      holes15,
-      holes3,
-      special,
-    },
-    station3: {
-      marking2d: 4,
-      topEngraving: 4,
-      sideEngraving: 4,
-      qrVerifierValue: `QR${modelNo}`,
-      qrGrade: "A",
-    },
-    summary: {
-      total: booleanCounts.total + numericResults.length,
-      ok: booleanCounts.ok + numericOk,
-      ng: booleanCounts.ng + numericNg,
-    },
-    source: {
-      backendUrl: "mock://inspection",
-      connected: true,
-      message: "Mock inspection data",
-      updatedAt: new Date().toISOString(),
-    },
-  };
-}
-
-
 
 function backendPlcConnected(payload: unknown) {
   if (!payload || typeof payload !== "object") return false;
@@ -584,10 +449,6 @@ function normalizeStatusRegisters(payload: unknown): NonNullable<InspectionApiPa
 export async function getInspectionData(modelNo?: string | null): Promise<InspectionApiPayload> {
   const requestedModelNo = (modelNo ?? CURRENT_MODEL_NO).replace(/[^0-9]/g, "");
   const normalizedModelNo: InspectionModelNo = requestedModelNo || CURRENT_MODEL_NO;
-  if ((process.env.INSPECTION_DATA_SOURCE || "plc").toLowerCase() !== "plc") {
-    return makeMockInspectionData(normalizedModelNo);
-  }
-
   const backend = await readFromBackend();
   const backendModelNo = backend.modelNo.replace(/[^0-9]/g, "") || normalizedModelNo;
   const backendModelNumber = backendModelNo === NONE_MODEL_NO ? "-" : backend.modelNumber !== "-" ? backend.modelNumber : `Shaft-${backendModelNo}`;

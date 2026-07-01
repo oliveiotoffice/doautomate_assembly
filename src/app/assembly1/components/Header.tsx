@@ -46,14 +46,19 @@ function formatLocalClock() {
 function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
   const rtc = formatRtc(payload.common?.rtc);
   const fallbackClock = rtc ?? formatLocalClock();
-  const componentNo = payload.common?.componentNo || payload.header.componentNo || payload.componentNo || '--';
-  const operator = payload.common?.operator || payload.header.operatorId || '--';
+  const displayValue = (value: unknown) => {
+    const text = String(value ?? '').trim();
+    return text && text !== '0' && text !== '-' ? text : '--';
+  };
+  const shaftId = displayValue(payload.common?.shaftId || payload.header.shaftNumber);
+  const operator = displayValue(payload.common?.operator || payload.header.operatorId);
+  const modelNo = displayValue(payload.common?.modelNo || payload.modelNo);
 
   return {
     shift: payload.common?.shift ?? '--',
     operator,
-    shaftId: componentNo,
-    modelNo: payload.common?.modelNo || payload.modelNo || '--',
+    shaftId,
+    modelNo,
     time: fallbackClock.time,
     date: fallbackClock.date,
   };
@@ -78,7 +83,7 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
     const refresh = async () => {
       try {
         const response = await fetch('/api/assembly/current', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Assembly API request failed');
+        if (!response.ok) return;
         const payload: InspectionApiPayload = await response.json();
         if (alive) setLiveData(liveDataFromPayload(payload));
       } catch {
@@ -317,7 +322,7 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
           <div className="hdr-title-tag">Inspection Module</div>
           <div className="hdr-title-main">
             <span>ZDM</span>
-            <span className="hdr-title-sub"> â€” Titanium Shaft Inspection &amp; Assembly</span>
+            <span className="hdr-title-sub"> - Titanium Shaft Inspection &amp; Assembly</span>
           </div>
         </div>
                 <div className="hdr-vdivider" />
@@ -347,6 +352,14 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
             <div className="hdr-pill-label">Shift</div>
             <div className="hdr-pill-value accent">#{liveData.shift}</div>
           </div> <div className="hdr-vdivider" /> 
+          <div className="hdr-pill">
+            <div className="hdr-pill-label">Shaft ID</div>
+            <div className="hdr-pill-value accent">{liveData.shaftId}</div>
+          </div> <div className="hdr-vdivider" />
+          <div className="hdr-pill">
+            <div className="hdr-pill-label">Model</div>
+            <div className="hdr-pill-value">{liveData.modelNo}</div>
+          </div> <div className="hdr-vdivider" />
           <div className="hdr-pill">
             <div className="hdr-pill-label">Operator</div>
             <div className="hdr-pill-value" title={role}>{liveData.operator}</div>

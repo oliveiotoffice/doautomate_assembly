@@ -25,6 +25,10 @@ const MODEL_NAMES = {
   6630862: "Shaft-6630862",
 };
 
+const MODEL_LOW_WORDS = Object.fromEntries(
+  MODEL_NUMBERS.filter(modelNo => modelNo !== 0).map(modelNo => [modelNo & 0xffff, modelNo])
+);
+
 const FLOAT_FIELDS = [
   ["cycleTime", "Common / Cycle Time", 11020, { min: 18, max: 42, actual: 28 }],
   ["plugLeftForce", "Station 7 / Plug Left Force", 11100, { min: 1.2, max: 2.8, actual: 1.9 }],
@@ -115,7 +119,8 @@ function emptyArea() {
 }
 
 function readModelNo(area) {
-  return getAssemblyWords(area, 11011, 1)[0] || 0;
+  const rawModelNo = getAssemblyWords(area, 11011, 1)[0] || 0;
+  return MODEL_LOW_WORDS[rawModelNo] || rawModelNo;
 }
 
 function writeCommon(area, values) {
