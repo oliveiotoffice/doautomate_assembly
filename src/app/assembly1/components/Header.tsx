@@ -318,7 +318,7 @@ export default function Header({ name, role, operatorName }: HeaderProps) {
         {/* Live values */}
         <div className="hdr-info-group">
           <div className="hdr-pill">
-            <div className="hdr-pill-label">Shaft ID</div>
+            <div className="hdr-pill-label">Shift</div>
             <div className="hdr-pill-value accent">{liveData.shaftId}</div>
           </div> <div className="hdr-vdivider" />
           <div className="hdr-pill">
