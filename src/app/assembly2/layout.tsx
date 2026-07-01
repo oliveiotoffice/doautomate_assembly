@@ -1,12 +1,9 @@
 'use client';
 
-import Header from './components/Header';
 import { ThemeProvider, useTheme } from './components/ThemeContext';
 
 function InnerLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
-  const displayName = 'Super Admin';
-  const displayRole = 'admin';
 
   return (
     <div
@@ -15,17 +12,15 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
         background: theme.bodyBg,
         color: theme.bodyText,
         transition: 'background 0.3s ease, color 0.3s ease',
+        fontFamily: "'Montserrat', sans-serif",
       }}
     >
-      <div style={{ flexShrink: 0 }}>
-        <Header name={displayName} role={displayRole} />
-      </div>
-
       <main
         className="flex-1 overflow-hidden"
         style={{
           display: 'flex',
           minHeight: 0,
+          height: '100%',
         }}
       >
         {children}
@@ -34,7 +29,7 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function SuperAdminLayout({
+export default function AssemblyLayout({
   children,
 }: {
   children: React.ReactNode;

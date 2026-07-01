@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { Moon, Sun } from 'lucide-react';
 import Image from 'next/image';
@@ -61,17 +61,14 @@ function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
 
 export default function Header({ name, role, shiftNumber = 1, operatorName }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
-  const [liveData, setLiveData] = useState<HeaderLiveData>(() => {
-    const clock = formatLocalClock();
-    return {
-      shift: shiftNumber,
-      operator: String(operatorName ?? name),
-      shaftId: '--',
-      modelNo: '--',
-      time: clock.time,
-      date: clock.date,
-    };
-  });
+  const [liveData, setLiveData] = useState<HeaderLiveData>(() => ({
+    shift: shiftNumber,
+    operator: String(operatorName ?? name),
+    shaftId: '--',
+    modelNo: '--',
+    time: '--:--:-- --',
+    date: '--',
+  }));
 
   const t = theme;
 
@@ -384,4 +381,5 @@ export default function Header({ name, role, shiftNumber = 1, operatorName }: He
     </>
   );
 }
+
 

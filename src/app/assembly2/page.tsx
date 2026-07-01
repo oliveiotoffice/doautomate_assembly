@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { CSSProperties } from "react";
@@ -235,7 +235,7 @@ const STATIONS: Station[] = [
   },
   { id: 10, name: "Part Rotation", code: "STATION 10", seqLabel: "Rotate", params: [] },
   {
-    id: 11, name: "STATION 11 - Inspection Station", code: "STATION 11", seqLabel: "Inspect",
+    id: 11, name: "STATION 11 - Final Inspection", code: "STATION 11", seqLabel: "Inspect",
     params: [
       { name: "Dowel Height Left", method: "LVDT", required: "4.5 mm", tolerance: "Â±0.25", unit: "mm" },
       { name: "Dowel Height Right", method: "LVDT", required: "4.5 mm", tolerance: "Â±0.25", unit: "mm" },
@@ -268,15 +268,20 @@ const DISPLAY_STATIONS = STATIONS.map((station) => {
 const PARAM_STATIONS = DISPLAY_STATIONS.filter((station) => station.params.length > 0 && station.id !== 10);
 
 const INSPECTION_PARAMS: Param[] = [
-  { name: "Dowel Height Left", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
-  { name: "Dowel Height Right", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
+  { name: "Left Dowel Height", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
+  { name: "Right Dowel Height", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
   { name: "Dowel Length", method: "LVDT", required: "448.0 mm", tolerance: "+/-0.5", unit: "mm" },
-  { name: "Overall Dia. Left", method: "Air Gauge", required: "35.00 mm", tolerance: "+/-0.05", unit: "mm" },
-  { name: "Overall Dia. Right", method: "Air Gauge", required: "35.00 mm", tolerance: "+/-0.05", unit: "mm" },
-  { name: "Milling Height Left", method: "LVDT", required: "23.00 mm", tolerance: "+/-0.1", unit: "mm" },
-  { name: "Milling Height Right", method: "LVDT", required: "23.00 mm", tolerance: "+/-0.1", unit: "mm" },
-  { name: "Ball Depth", method: "Laser", required: "15.66 mm", tolerance: "+/-0.05", unit: "mm" },
-  { name: "Plug Depth", method: "Laser", required: "16.10 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Overall Length", method: "LVDT", required: "466.05 mm", tolerance: "+/-0.1", unit: "mm" },
+  { name: "Left Overall Diameter", method: "Air Gauge", required: "35.00 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Right Overall Diameter", method: "Air Gauge", required: "35.00 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Left Milling Height", method: "LVDT", required: "23.00 mm", tolerance: "+/-0.1", unit: "mm" },
+  { name: "Right Milling Height", method: "LVDT", required: "23.00 mm", tolerance: "+/-0.1", unit: "mm" },
+  { name: "Plug Left Depth", method: "Laser", required: "16.10 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Plug Right Depth", method: "Laser", required: "16.10 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Ball Left Depth", method: "Laser", required: "15.66 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Ball Right Depth", method: "Laser", required: "15.66 mm", tolerance: "+/-0.05", unit: "mm" },
+  { name: "Dowel Left Depth", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
+  { name: "Dowel Right Depth", method: "LVDT", required: "4.50 mm", tolerance: "+/-0.25", unit: "mm" },
   { name: "QR Grade", method: "Vision", required: "1.00", tolerance: "+/-0.2", unit: "grade" },
 ];
 
@@ -321,7 +326,7 @@ const fs = {
 };
 
 const MONO: CSSProperties = {
-  fontFamily: "'Montserrat', Arial, 'Helvetica Neue', 'Segoe UI', sans-serif",
+  fontFamily: "'Montserrat', sans-serif",
   letterSpacing: 0,
 };
 
@@ -443,6 +448,10 @@ function formatToleranceRange(param: Param): string {
   const low = req + lo;
   const high = req + hi;
   return `${low.toFixed(decimals)} - ${high.toFixed(decimals)}`;
+}
+
+function formatUnit(unit: string): string {
+  return unit.toLowerCase();
 }
 
 function paramSide(name: string): string {
@@ -927,15 +936,15 @@ function MetricReadout({
           <span style={{ ...MONO, minWidth: 0, alignSelf: "center", fontSize: "calc(clamp(28px, min(13.5cqw, 3.35dvh), 46px) * var(--h-scale))", fontWeight: 900, color: C.info, lineHeight: 0.9, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", transformOrigin: "left center" }}>
             {actual.toFixed(decimals)}
           </span>
-          <span style={{ ...MONO, flexShrink: 0, fontSize: "calc(clamp(12px, min(5.8cqw, 1.35dvh), 16px) * var(--h-scale))", fontWeight: 900, color: C.textMid, lineHeight: 1, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-            {param.unit}
+          <span style={{ ...MONO, flexShrink: 0, fontSize: "calc(clamp(12px, min(5.8cqw, 1.35dvh), 16px) * var(--h-scale))", fontWeight: 900, color: C.textMid, lineHeight: 1, textTransform: "lowercase", whiteSpace: "nowrap" }}>
+            {formatUnit(param.unit)}
           </span>
         </div>
       </div>
 
       <div style={{ minWidth: 0, minHeight: "calc(22px * var(--h-scale))", padding: "4px 6px", borderTop: `1px solid ${C.borderSoft}`, background: C.panel, display: "flex", alignItems: "center" }}>
         <span style={{ ...MONO, display: "block", minWidth: 0, fontSize: "calc(clamp(9px, 0.48vw, 12px) * var(--h-scale))", fontWeight: 900, color: C.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          TOL : {formatToleranceRange(param)} {param.unit}
+          TOL : {formatToleranceRange(param)} {formatUnit(param.unit)}
         </span>
       </div>
     </div>
@@ -1034,10 +1043,10 @@ function ForceDepthGraph({
       <circle cx={actualX} cy={actualY} r="7" fill={C.accent} stroke={C.panel} strokeWidth="3" />
 
       <text x={pad.left + plotWidth / 2} y={height - 14} textAnchor="middle" fill={C.text} fontSize="15" fontWeight="900">
-        X Axis Force ({forceParam.unit})
+        X Axis Force ({formatUnit(forceParam.unit)})
       </text>
       <text transform={`translate(20 ${pad.top + plotHeight / 2}) rotate(-90)`} textAnchor="middle" fill={C.text} fontSize="15" fontWeight="900">
-        Y Axis Depth ({depthParam.unit})
+        Y Axis Depth ({formatUnit(depthParam.unit)})
       </text>
     </svg>
   );
@@ -1079,12 +1088,12 @@ function ForceDepthValueCard({
           {formatMetricValue(param, actual)}
         </span>
         <span style={{ ...MONO, fontSize: fs.lg, fontWeight: 900, color: C.textMid }}>
-          {param.unit}
+          {formatUnit(param.unit)}
         </span>
       </div>
       <div style={{ padding: "8px 11px", borderTop: `1px solid ${C.border}`, background: C.panelAlt }}>
         <span style={{ ...MONO, display: "block", minWidth: 0, fontSize: fs.sm, fontWeight: 800, color: C.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          TOL : {formatToleranceRange(param)} {param.unit}
+          TOL : {formatToleranceRange(param)} {formatUnit(param.unit)}
         </span>
       </div>
     </div>
@@ -1269,35 +1278,21 @@ function ForceDepthModal({
 function QRTile({ C, pass, style }: { C: AssemblyTheme; pass: boolean; style?: CSSProperties }) {
   const tone = pass ? C.ok : C.ng;
   const grade = pass ? "A" : "C";
-  const status = pass ? "PASS" : "FAIL";
 
   return (
-    <div className="qr-tile" style={{ minHeight: 0, display: "grid", gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)", gap: 4, padding: 0, overflow: "hidden", ...style }}>
-      <div style={{ minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(15,23,42,0.06)" }}>
-        <div style={{ ...MONO, minWidth: 0, padding: "6px 8px", borderBottom: `1px solid ${C.borderSoft}`, background: C.surface, fontSize: fs.md, fontWeight: 900, color: C.text, textTransform: "uppercase" as const, lineHeight: 1, whiteSpace: "normal", textAlign: "center" }}>
-          QR Grade
-        </div>
-        <div style={{ minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px 6px", background: C.panel }}>
-          <QrCode color={tone} strokeWidth={2.4} style={{ width: "clamp(34px, 4.4vw, 62px)", height: "clamp(34px, 4.4vw, 62px)", flexShrink: 0 }} />
-          <span style={{ ...MONO, color: tone, fontSize: fs.sm, fontWeight: 900, letterSpacing: "0.08em", lineHeight: 1.1, textAlign: "center", textTransform: "uppercase" as const, whiteSpace: "normal" }}>
-         Grade {grade}
-          </span>
-        </div>
+    <div className="qr-tile" style={{ minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(15,23,42,0.06)", ...style }}>
+      <div style={{ ...MONO, minWidth: 0, padding: "6px 8px", borderBottom: `1px solid ${C.borderSoft}`, background: C.surface, fontSize: fs.md, fontWeight: 900, color: C.text, textTransform: "uppercase" as const, lineHeight: 1, whiteSpace: "normal", textAlign: "center" }}>
+        QR Grade
       </div>
-      <div style={{ ...MONO, minHeight: 0, border: `1.5px solid ${C.border}`, borderTop: `3px solid ${tone}`, borderRadius: 3, background: C.panel, display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", overflow: "hidden", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95), 0 1px 2px rgba(15,23,42,0.06)" }}>
-        <div style={{ minWidth: 0, padding: "6px 8px", borderBottom: `1px solid ${C.borderSoft}`, background: C.surface, fontSize: fs.sm, fontWeight: 900, color: C.text, textTransform: "uppercase" as const, lineHeight: 1.1, whiteSpace: "normal", textAlign: "center" }}>
-          Completed Status
-        </div>
-        <div style={{ minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 6 }}>
-          <span style={{ borderRadius: 3, padding: "7px 12px", border: `1px solid ${tone}`, background: pass ? C.okSoft : C.ngSoft, color: tone, fontSize: fs.xl, fontWeight: 900, lineHeight: 1, textTransform: "uppercase" as const, whiteSpace: "nowrap" }}>
-            {status}
-          </span>
-        </div>
+      <div style={{ minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px 6px", background: C.panel }}>
+        <QrCode color={tone} strokeWidth={2.4} style={{ width: "clamp(30px, 3.8vw, 54px)", height: "clamp(30px, 3.8vw, 54px)", flexShrink: 0 }} />
+        <span style={{ ...MONO, color: tone, fontSize: fs.sm, fontWeight: 900, letterSpacing: "0.08em", lineHeight: 1.1, textAlign: "center", textTransform: "uppercase" as const, whiteSpace: "normal" }}>
+          Grade {grade}
+        </span>
       </div>
     </div>
   );
 }
-
 function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
   station: Station;
   actuals: Record<number, number>;
@@ -1312,15 +1307,20 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
 
   if (isInspection) {
     const inspectionLayout = [
-      "Dowel Height Left",
-      "Dowel Height Right",
+      "Left Dowel Height",
+      "Right Dowel Height",
       "Dowel Length",
-      "Overall Dia. Left",
-      "Overall Dia. Right",
-      "Plug Depth",
-      "Milling Height Left",
-      "Milling Height Right",
-      "Ball Depth",
+      "Overall Length",
+      "Left Overall Diameter",
+      "Right Overall Diameter",
+      "Left Milling Height",
+      "Right Milling Height",
+      "Plug Left Depth",
+      "Plug Right Depth",
+      "Ball Left Depth",
+      "Ball Right Depth",
+      "Dowel Left Depth",
+      "Dowel Right Depth",
       "QR Grade",
     ];
 
@@ -1335,7 +1335,7 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
           minHeight: 0,
           padding: 4,
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr)) minmax(92px, 0.58fr)",
+          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
           gridTemplateRows: "repeat(3, minmax(0, 1fr))",
           gap: 4,
           overflow: "hidden",
@@ -1348,7 +1348,7 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
           const i = params.indexOf(p);
           const actual = actuals[i] ?? parseReq(p.required);
           const pass = checkPass(p, actual);
-          if (name === "QR Grade") return <QRTile key={name} C={C} pass={pass} style={{ gridColumn: 4, gridRow: "1 / span 3" }} />;
+          if (name === "QR Grade") return <QRTile key={name} C={C} pass={pass} style={{ gridColumn: (layoutIndex % 5) + 1, gridRow: Math.floor(layoutIndex / 5) + 1 }} />;
           return (
             <MetricReadout
               key={p.name}
@@ -1357,8 +1357,8 @@ function StationMeasurementView({ station, actuals, C, onOpenGraph }: {
               pass={pass}
               C={C}
               style={{
-                gridColumn: (layoutIndex % 3) + 1,
-                gridRow: Math.floor(layoutIndex / 3) + 1,
+                gridColumn: (layoutIndex % 5) + 1,
+                gridRow: Math.floor(layoutIndex / 5) + 1,
               }}
             />
           );
@@ -1812,16 +1812,16 @@ function AssemblySvgCard({
         <line x1={0} y1={row1 + row2} x2={width} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
         <line x1={width / 2} y1={row1} x2={width / 2} y2={row1 + row2} stroke={C.text} strokeWidth={0.6} />
       </g>
-      <text x={width / 2} y={row1 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Arial, Helvetica Neue, Segoe UI, sans-serif">
+      <text x={width / 2} y={row1 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Montserrat, sans-serif">
         {label}
       </text>
-      <text x={width / 4} y={row1 + row2 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Arial, Helvetica Neue, Segoe UI, sans-serif">
+      <text x={width / 4} y={row1 + row2 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Montserrat, sans-serif">
         H: {format(high)}
       </text>
-      <text x={(width * 3) / 4} y={row1 + row2 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Arial, Helvetica Neue, Segoe UI, sans-serif">
+      <text x={(width * 3) / 4} y={row1 + row2 / 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize={8.5} fontWeight="700" fontFamily="Montserrat, sans-serif">
         L: {format(low)}
       </text>
-      <text x={width / 2} y={row1 + row2 + row3 / 2} textAnchor="middle" dominantBaseline="middle" fill="#ffffff" fontSize={13.5} fontWeight="800" fontFamily="Arial, Helvetica Neue, Segoe UI, sans-serif">
+      <text x={width / 2} y={row1 + row2 + row3 / 2} textAnchor="middle" dominantBaseline="middle" fill="#ffffff" fontSize={13.5} fontWeight="800" fontFamily="Montserrat, sans-serif">
         {format(value)}
       </text>
     </g>
@@ -1911,7 +1911,16 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
               <line x1="45" y1="330" x2="1055" y2="330" stroke={C.svgLine} strokeWidth="1.5" markerStart="url(#arrow)" markerEnd="url(#arrow)" />
               <line x1="40" y1="340" x2="40" y2="150" stroke={C.svgLine} strokeWidth="0.5" />
               <line x1="1060" y1="340" x2="1060" y2="150" stroke={C.svgLine} strokeWidth="0.5" />
-           
+             <AssemblySvgCard
+        x={500}
+        y={295}
+        label="Dowel Length"
+        high="498.3"
+        low="498.1"
+        value="498.2"
+        C={C}
+      />
+
 
        
               {/* left side 35 mm diameter */}
@@ -1919,6 +1928,15 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
               <line x1="180" y1="115" x2="260" y2="115" stroke={C.svgLine} strokeWidth="1.5" />
               <line x1="180" y1="185" x2="260" y2="185" stroke={C.svgLine} strokeWidth="1.5" />
               <line x1="220" y1="230" x2="220" y2="185" stroke={C.svgLine} strokeWidth="1.5" markerEnd="url(#arrow)" />
+   <AssemblySvgCard
+        x={160}
+        y={230}
+        label="Overall Dia(Left)"
+        high="34.01"
+        low="34.5"
+        value="34.8"
+        C={C}
+      />
 
 
               {/* Right side 35 diameter */}
@@ -1928,7 +1946,15 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
               <line x1="860" y1="185" x2="940" y2="185" stroke={C.svgLine} strokeWidth="1.5" />
               <line x1="900" y1="225" x2="900" y2="185" stroke={C.svgLine} strokeWidth="1.5" markerEnd="url(#arrow)" />
 
-          
+                <AssemblySvgCard
+        x={835}
+        y={15}
+        label="Overall Dia(right)"
+        high="34.01"
+        low="34.5"
+        value="34.8"
+        C={C}
+      />
 
               {/* left side Milling height */}
                <line x1="420" y1="125" x2="420" y2="60" stroke={C.svgLine} strokeWidth="1.5" markerStart="url(#arrow)" />
@@ -1936,6 +1962,15 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
               <line x1="380" y1="185" x2="460" y2="185" stroke={C.svgLine} strokeWidth="2" />
               <line x1="420" y1="230" x2="420" y2="185" stroke={C.svgLine} strokeWidth="1.5" markerEnd="url(#arrow)" />
 
+ <AssemblySvgCard
+        x={360}
+        y={15}
+        label="Milling height(left)"
+        high="34.01"
+        low="34.5"
+        value="34.8"
+        C={C}
+      />
 
               {/* Right side Milling height */}
 
@@ -1945,10 +1980,10 @@ function AssemblyShaftSvg({ C }: { C: AssemblyTheme }) {
               <line x1="720" y1="185" x2="800" y2="185" stroke={C.svgLine} strokeWidth="2" />
               <line x1="760" y1="230" x2="760" y2="185" stroke={C.svgLine} strokeWidth="1.5" markerEnd="url(#arrow)" />
 
-           <AssemblySvgCard
-        x={360}
-        y={15}
-        label="Milling height(left)"
+     <AssemblySvgCard
+        x={700}
+        y={230}
+        label="Milling height(right)"
         high="34.01"
         low="34.5"
         value="34.8"
@@ -2320,12 +2355,12 @@ export default function Dashboard() {
   const activeStations = getVisibleStations(completedIds);
 
   return (
-    <div className="dashboard-shell assembly-dashboard" style={{ ...MONO, "--h-scale": heightScale, width: "100%", height: "100%", minHeight: 0, overflow: "hidden", background: C.bg, transition: "background 0.25s ease, color 0.25s ease", display: "flex", flexDirection: "column" } as CSSProperties}>
+    <div className="dashboard-shell assembly-dashboard" style={{ ...MONO, "--h-scale": heightScale, width: "100%", height: "100dvh", minHeight: 0, overflow: "hidden", background: C.bg, transition: "background 0.25s ease, color 0.25s ease", display: "flex", flexDirection: "column" } as CSSProperties}>
       <Header name="Assembly SCADA" role="Assembly" />
       {!plcConnected && <PlcDisconnectedBanner message={plcErrorMessage} C={C} />}
       {!plcConnected && <PlcDisconnectedBody message={plcErrorMessage} C={C} />}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
         .assembly-dashboard {
           --h-scale: 1;
         }
@@ -2336,7 +2371,8 @@ export default function Dashboard() {
           color:${C.text};
           display:flex;
           width:100%;
-          height:100%;
+          flex:1 1 0;
+          height:auto;
           min-height:0;
           overflow:hidden;
           background:
@@ -2423,7 +2459,7 @@ export default function Dashboard() {
           height:100% !important;
           min-width:0 !important;
           min-height:0 !important;
-          grid-template-columns:repeat(3,minmax(0,1fr)) minmax(118px,0.72fr) !important;
+          grid-template-columns:repeat(5,minmax(0,1fr)) !important;
           grid-template-rows:repeat(3,minmax(0,1fr)) !important;
           gap:clamp(4px, 0.4dvh, 6px) !important;
           padding:clamp(4px, 0.4dvh, 6px) !important;
@@ -2580,6 +2616,7 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
 
 
