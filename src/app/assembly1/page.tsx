@@ -424,6 +424,7 @@ function inspectionSvgValues(name: string, actuals: Record<number, number>, rang
 }
 
 function formatUnit(unit: string): string {
+  if (unit.toLowerCase() === "kn") return "KN";
   return unit.toLowerCase();
 }
 
