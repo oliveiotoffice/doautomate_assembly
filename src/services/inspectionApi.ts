@@ -92,7 +92,7 @@ export type UseInspectionSnapshotResult = {
 };
 
 const DEFAULT_API_BASE_URL = "http://localhost:4000";
-const DEFAULT_POLL_MS = 1000;
+const DEFAULT_POLL_MS = 100;
 const EMPTY_TEXT = "-";
 
 const emptyNumericReading = (): NumericReading => ({

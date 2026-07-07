@@ -5,7 +5,7 @@ import Assembly1 from "./assembly1/page";
 import Assembly2 from "./assembly2/page";
 import Assembly3 from "./assembly3/page";
 
-const LIVE_REFRESH_MS = 1000;
+const LIVE_REFRESH_MS = 100;
 
 type AssemblySwitchPayload = {
   modelNo?: string | number;

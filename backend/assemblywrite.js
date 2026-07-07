@@ -12,9 +12,10 @@ const {
   writeWordsInChunks,
 } = require("./assembly-layout");
 
-const WRITE_UI_PORT = 5019;
+const WRITE_UI_PORT = 5020;
 const DEFAULT_WRITE_INTERVAL_MS = 3000;
 const DEFAULT_ERROR_DELAY_MS = 10000;
+const COMPONENT_NO_MAX_LENGTH = 30;
 
 let nextComponentNo = BigInt(process.env.ASSEMBLY_COMPONENT_START || 3000001);
 let lastManualValues = makeDefaultValues();
@@ -90,15 +91,21 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function normalizeComponentNo(value, fallback) {
+  return String(value || fallback || "").replace(/[^\x20-\x7e]/g, "").slice(0, COMPONENT_NO_MAX_LENGTH);
+}
+
 function normalizeValues(input = {}) {
   const values = makeDefaultValues();
+  const requestedComponentNo = normalizeComponentNo(input.componentNo, "");
+  const autoComponentNo = nextComponentNo.toString();
   values.shaftId = toNumber(input.shaftId, values.shaftId);
   values.operator = String(input.operator || values.operator).slice(0, 20);
   values.modelNo = toNumber(input.modelNo, values.modelNo);
-  values.autoComponentNo = input.autoComponentNo !== false;
+  values.autoComponentNo = input.autoComponentNo !== false && (!requestedComponentNo || requestedComponentNo === autoComponentNo);
   values.componentNo = values.autoComponentNo
-    ? nextComponentNo.toString()
-    : String(input.componentNo || values.componentNo).replace(/\D/g, "") || values.componentNo;
+    ? autoComponentNo
+    : requestedComponentNo || values.componentNo;
   values.partsProcessed = toNumber(input.partsProcessed, values.partsProcessed);
   values.good = toNumber(input.good, values.good);
   values.scrap = toNumber(input.scrap, values.scrap);
@@ -250,7 +257,7 @@ function renderUi(config) {
       <div class="body grid">
         <label>Model No<select id="modelNo"></select></label>
         <label>Shaft ID<input id="shaftId" type="number" step="1" /></label>
-        <label>Component No<input id="componentNo" inputmode="numeric" /></label>
+        <label>Component No<input id="componentNo" maxlength="${COMPONENT_NO_MAX_LENGTH}" /></label>
         <label>Operator<input id="operator" maxlength="20" /></label>
         <label>Parts Processed<input id="partsProcessed" type="number" step="1" /></label>
         <label>Good<input id="good" type="number" step="1" /></label>
@@ -308,7 +315,7 @@ function renderUi(config) {
         shaftId: numberValue("shaftId"),
         operator: $("operator").value,
         modelNo: numberValue("modelNo"),
-        componentNo: $("componentNo").value.replace(/\\D/g, ""),
+        componentNo: $("componentNo").value,
         autoComponentNo: $("autoComponentNo").checked,
         partsProcessed: numberValue("partsProcessed"),
         good: numberValue("good"),
@@ -328,6 +335,9 @@ function renderUi(config) {
         const max = Number(document.querySelector('[data-float="' + key + '"][data-part="max"]').value);
         input.value = randomBetween(min, max);
       });
+    });
+    $("componentNo").addEventListener("input", () => {
+      $("autoComponentNo").checked = false;
     });
     async function postWrite(path, payload, label) {
       status.textContent = label + "...";
@@ -453,11 +463,11 @@ async function main() {
   }
 }
 
-if (process.argv.includes("--server") || process.argv.includes("--ui")) {
-  startServer();
-} else {
+if (process.argv.includes("--random")) {
   main().catch(error => {
     console.error("Assembly PLC write failed:", error.message);
     process.exitCode = 1;
   });
+} else {
+  startServer();
 }

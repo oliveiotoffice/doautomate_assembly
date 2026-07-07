@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import type { InspectionApiPayload, InspectionRtc } from '../../../lib/inspectionDataService';
 import { useTheme } from './ThemeContext';
 
-const LIVE_REFRESH_MS = 1000;
+const LIVE_REFRESH_MS = 100;
 
 interface HeaderProps {
   name: string;
@@ -32,39 +32,30 @@ function formatRtc(rtc?: InspectionRtc | null) {
   };
 }
 
-function formatLocalClock() {
-  const now = new Date();
-  return {
-    time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
-    date: now.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-  };
-}
-
 function liveDataFromPayload(payload: InspectionApiPayload): HeaderLiveData {
   const rtc = formatRtc(payload.common?.rtc);
-  const fallbackClock = rtc ?? formatLocalClock();
   const displayValue = (value: unknown) => {
     const text = String(value ?? '').trim();
-    return text && text !== '0' && text !== '-' ? text : '--';
+    return text && text !== '-' ? text : '';
   };
-  const shaftId = displayValue(payload.common?.shaftId || payload.header.shaftNumber);
+  const shaftId = displayValue(payload.common?.shaftId ?? payload.header.shaftNumber);
   const operator = displayValue(payload.common?.operator || payload.header.operatorId);
 
   return {
     operator,
     shaftId,
-    time: fallbackClock.time,
-    date: fallbackClock.date,
+    time: rtc?.time ?? '',
+    date: rtc?.date ?? '',
   };
 }
 
 export default function Header({ name, role, operatorName }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const [liveData, setLiveData] = useState<HeaderLiveData>(() => ({
-    operator: String(operatorName ?? name),
-    shaftId: '--',
-    time: '--:--:-- --',
-    date: '--',
+    operator: String(operatorName ?? ''),
+    shaftId: '',
+    time: '',
+    date: '',
   }));
 
   const t = theme;
@@ -79,9 +70,7 @@ export default function Header({ name, role, operatorName }: HeaderProps) {
         const payload: InspectionApiPayload = await response.json();
         if (alive) setLiveData(liveDataFromPayload(payload));
       } catch {
-        if (!alive) return;
-        const clock = formatLocalClock();
-        setLiveData(previous => ({ ...previous, time: clock.time, date: clock.date }));
+        return;
       }
     };
 

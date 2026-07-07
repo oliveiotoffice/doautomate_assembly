@@ -4,30 +4,28 @@ export const runtime = "nodejs";
 const ASSEMBLY_BACKEND_URL = "http://localhost:5019";
 
 function makeDisconnectedPayload(message: string) {
-  const updatedAt = new Date().toISOString();
-
   return {
-    header: { shaftNumber: "-", operatorId: "-", componentNo: "-", modelNumber: "-" },
+    header: { shaftNumber: "", operatorId: "", componentNo: "", modelNumber: "" },
     common: {
-      shaftId: 0,
+      shaftId: "",
       operator: "",
-      modelNo: 0,
-      componentNo: 0,
-      partsProcessed: 0,
-      good: 0,
-      scrap: 0,
-      rework: 0,
+      modelNo: "",
+      componentNo: "",
+      partsProcessed: null,
+      good: null,
+      scrap: null,
+      rework: null,
       activeAlarms: "",
     },
-    componentNo: "-",
-    modelNo: "0",
-    modelNumber: "-",
+    componentNo: "",
+    modelNo: "",
+    modelNumber: "",
     actuals: {},
     stations: {},
-    statusRegisters: { station11: { completedStatus: 0 } },
-    summary: { total: 0, ok: 0, ng: 0, scrap: 0, rework: 0 },
-    source: { backendUrl: ASSEMBLY_BACKEND_URL, connected: false, message, updatedAt },
-    plc: { connected: false, message, updatedAt },
+    statusRegisters: {},
+    summary: { total: null, ok: null, ng: null, scrap: null, rework: null },
+    source: { backendUrl: ASSEMBLY_BACKEND_URL, connected: false, message, updatedAt: "" },
+    plc: { connected: false, message, updatedAt: "" },
   };
 }
 

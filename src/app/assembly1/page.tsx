@@ -33,6 +33,8 @@ type ForceDepthSelection = {
   forceIndex: number;
   depthIndex: number;
 };
+type ForceDepthSample = { force: number; depth: number };
+type ForceDepthHistory = Record<number, Record<string, ForceDepthSample[]>>;
 type SvgValueStatus = "normal" | "pass" | "fail";
 type AssemblyApiPayload = {
   actuals?: Record<string, Record<string, number | null | undefined>>;
@@ -73,7 +75,8 @@ type AssemblyApiPayload = {
   };
 };
 
-const LIVE_REFRESH_MS = 1000;
+const LIVE_REFRESH_MS = 100;
+const FORCE_DEPTH_HISTORY_LIMIT = 5;
 
 function apiConnected(payload: AssemblyApiPayload | null): boolean {
   return payload?.source?.connected === true || payload?.plc?.connected === true;
@@ -468,6 +471,41 @@ function getForceDepthPair(params: Param[], forceIndex: number): ForceDepthSelec
   return nextDepthIndex >= 0 ? { forceIndex, depthIndex: nextDepthIndex } : null;
 }
 
+function forceDepthKey(selection: ForceDepthSelection): string {
+  return `${selection.forceIndex}:${selection.depthIndex}`;
+}
+
+function updateForceDepthHistory(previous: ForceDepthHistory, actuals: LiveActuals): ForceDepthHistory {
+  let next = previous;
+
+  PARAM_STATIONS.forEach((station) => {
+    const params = station.id === 11 ? INSPECTION_PARAMS : station.params;
+    params.forEach((param, forceIndex) => {
+      if (!isForceParam(param)) return;
+      const pair = getForceDepthPair(params, forceIndex);
+      if (!pair) return;
+
+      const stationActuals = actuals[station.id] || {};
+      const force = stationActuals[pair.forceIndex];
+      const depth = stationActuals[pair.depthIndex];
+      if (typeof force !== "number" || typeof depth !== "number" || force === 0 || depth === 0) return;
+
+      const key = forceDepthKey(pair);
+      const stationHistory = next[station.id] || {};
+      const samples = stationHistory[key] || [];
+      const last = samples[samples.length - 1];
+      if (last && last.force === force && last.depth === depth) return;
+
+      if (next === previous) next = { ...previous };
+      next[station.id] = {
+        ...stationHistory,
+        [key]: [...samples, { force, depth }].slice(-FORCE_DEPTH_HISTORY_LIMIT),
+      };
+    });
+  });
+
+  return next;
+}
 function forceSparkPoints(actual: number, req: number, tol: number): string {
   const width = 112;
   const height = 30;
@@ -925,22 +963,6 @@ function MetricReadout({
   );
 }
 
-function forceDepthCurveData(forceActual: number, depthActual: number): Array<{ force: number; depth: number }> {
-  const peakForce = Math.max(forceActual, 0.1);
-  const peakDepth = Math.max(depthActual, 0.1);
-
-  return Array.from({ length: 44 }, (_, i) => {
-    const t = i / 43;
-    const force = peakForce * (0.04 * t + 0.96 * Math.pow(t, 0.72));
-    const depthRamp = 0.08 * t + 0.92 * (1 - Math.cos((t * Math.PI) / 2));
-    const settleWave = Math.sin(t * Math.PI * 5 + peakForce) * peakDepth * 0.008 * (1 - t);
-    return {
-      force,
-      depth: Math.max(0, Math.min(peakDepth * 1.08, peakDepth * depthRamp + settleWave)),
-    };
-  });
-}
-
 function formatMetricValue(param: Param, value: number): string {
   return value.toFixed(param.unit === "kN" ? 2 : 3);
 }
@@ -950,6 +972,7 @@ function ForceDepthGraph({
   depthParam,
   forceActual,
   depthActual,
+  samples,
   forceRange,
   depthRange,
   C,
@@ -958,6 +981,7 @@ function ForceDepthGraph({
   depthParam: Param;
   forceActual: number;
   depthActual: number;
+  samples: ForceDepthSample[];
   forceRange?: LiveRange;
   depthRange?: LiveRange;
   C: AssemblyTheme;
@@ -969,12 +993,13 @@ function ForceDepthGraph({
   const plotHeight = height - pad.top - pad.bottom;
   const forceSet = forceRange ? (forceRange.min + forceRange.max) / 2 : forceActual;
   const depthSet = depthRange ? (depthRange.min + depthRange.max) / 2 : depthActual;
-  const forceMax = Math.max(forceActual, forceSet, 0.1) * 1.18;
-  const depthMax = Math.max(depthActual, depthSet, 0.1) * 1.14;
+  const graphSamples = samples.length > 0 ? samples : [{ force: forceActual, depth: depthActual }];
+  const forceMax = Math.max(forceActual, forceSet, ...graphSamples.map((sample) => sample.force), 0.1) * 1.18;
+  const depthMax = Math.max(depthActual, depthSet, ...graphSamples.map((sample) => sample.depth), 0.1) * 1.14;
   const xOf = (force: number) => pad.left + (Math.max(0, Math.min(force, forceMax)) / forceMax) * plotWidth;
   const yOf = (depth: number) => pad.top + plotHeight - (Math.max(0, Math.min(depth, depthMax)) / depthMax) * plotHeight;
-  const curvePoints = forceDepthCurveData(forceActual, depthActual)
-    .map((point) => `${xOf(point.force).toFixed(1)},${yOf(point.depth).toFixed(1)}`)
+  const curvePoints = graphSamples
+    .map((sample) => `${xOf(sample.force).toFixed(1)},${yOf(sample.depth).toFixed(1)}`)
     .join(" ");
   const xTicks = Array.from({ length: 5 }, (_, i) => (forceMax / 4) * i);
   const yTicks = Array.from({ length: 5 }, (_, i) => (depthMax / 4) * i);
@@ -1017,7 +1042,10 @@ function ForceDepthGraph({
 
       <line x1={targetX} y1={pad.top} x2={targetX} y2={pad.top + plotHeight} stroke={C.accent} strokeWidth="1.5" strokeDasharray="6 6" opacity="0.68" />
       <line x1={pad.left} y1={targetY} x2={pad.left + plotWidth} y2={targetY} stroke={C.accent} strokeWidth="1.5" strokeDasharray="6 6" opacity="0.68" />
-      <polyline points={curvePoints} fill="none" stroke={C.info} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {graphSamples.length > 1 && <polyline points={curvePoints} fill="none" stroke={C.info} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
+      {graphSamples.map((sample, index) => (
+        <circle key={`${sample.force}-${sample.depth}-${index}`} cx={xOf(sample.force)} cy={yOf(sample.depth)} r={index === graphSamples.length - 1 ? 6 : 4.5} fill={index === graphSamples.length - 1 ? C.accent : C.info} stroke={C.panel} strokeWidth="2" />
+      ))}
       <circle cx={actualX} cy={actualY} r="7" fill={C.accent} stroke={C.panel} strokeWidth="3" />
 
       <text x={pad.left + plotWidth / 2} y={height - 14} textAnchor="middle" fill={C.text} fontSize="15" fontWeight="900">
@@ -1160,6 +1188,7 @@ function ForceDepthModal({
   selection,
   actuals,
   ranges,
+  history,
   C,
   onClose,
 }: {
@@ -1167,6 +1196,7 @@ function ForceDepthModal({
   selection: ForceDepthSelection;
   actuals: Record<number, number>;
   ranges: Record<number, LiveRange>;
+  history: Record<string, ForceDepthSample[]>;
   C: AssemblyTheme;
   onClose: () => void;
 }) {
@@ -1180,6 +1210,7 @@ function ForceDepthModal({
   if (typeof forceActual !== "number" || typeof depthActual !== "number") return null;
   const forceRange = ranges[selection.forceIndex];
   const depthRange = ranges[selection.depthIndex];
+  const samples = history[forceDepthKey(selection)] || [];
 
   return (
     <div
@@ -1254,7 +1285,7 @@ function ForceDepthModal({
 
         <div style={{ minHeight: 0, padding: 14, display: "grid", gridTemplateRows: "minmax(0, 1fr) auto", gap: 12, background: C.imageBg }}>
           <div style={{ minHeight: 0, border: `1px solid ${C.border}`, borderRadius: 4, background: C.panel, overflow: "hidden" }}>
-            <ForceDepthGraph forceParam={forceParam} depthParam={depthParam} forceActual={forceActual} depthActual={depthActual} forceRange={forceRange} depthRange={depthRange} C={C} />
+            <ForceDepthGraph forceParam={forceParam} depthParam={depthParam} forceActual={forceActual} depthActual={depthActual} samples={samples} forceRange={forceRange} depthRange={depthRange} C={C} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, minWidth: 0 }}>
             <ForceDepthValueCard param={forceParam} actual={forceActual} range={forceRange} C={C} />
@@ -1444,7 +1475,7 @@ function StationMeasurementView({ station, actuals, ranges, qrGrade, plcConnecte
   );
 }
 
-function AssemblyStationPanel({ station, done, loading, actuals, ranges, qrGrade, plcConnected, C }: {
+function AssemblyStationPanel({ station, done, loading, actuals, ranges, qrGrade, plcConnected, history, C }: {
   station: Station;
   done: boolean;
   loading: boolean;
@@ -1452,6 +1483,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, ranges, qrGrade
   ranges: Record<number, LiveRange>;
   qrGrade: string;
   plcConnected: boolean;
+  history: Record<string, ForceDepthSample[]>;
   C: AssemblyTheme;
 }) {
   const [selectedGraph, setSelectedGraph] = useState<ForceDepthSelection | null>(null);
@@ -1473,6 +1505,7 @@ function AssemblyStationPanel({ station, done, loading, actuals, ranges, qrGrade
           selection={selectedGraph}
           actuals={actuals}
           ranges={ranges}
+          history={history}
           C={C}
           onClose={() => setSelectedGraph(null)}
         />
@@ -2277,6 +2310,7 @@ export default function Dashboard() {
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [liveActuals, setLiveActuals] = useState<LiveActuals>({});
   const [liveRanges, setLiveRanges] = useState<LiveRanges>({});
+  const [forceDepthHistory, setForceDepthHistory] = useState<ForceDepthHistory>({});
   const [qrGrade, setQrGrade] = useState("");
   const [totalInspected, setTotalInspected] = useState(0);
   const [okCount, setOkCount] = useState(0);
@@ -2286,8 +2320,8 @@ export default function Dashboard() {
   const [plcErrorMessage, setPlcErrorMessage] = useState("PLC data not loaded");
   const [cycleTime, setCycleTime] = useState<number | null>(null);
   const [activeAlarms, setActiveAlarms] = useState("");
-  const [componentNo, setComponentNo] = useState("-");
-  const [modelLabel, setModelLabel] = useState("-");
+  const [componentNo, setComponentNo] = useState("");
+  const [modelLabel, setModelLabel] = useState("");
 
   const intervalsRef = useRef<Record<number, ReturnType<typeof setInterval>>>({});
 
@@ -2342,7 +2376,9 @@ export default function Dashboard() {
         const connected = apiConnected(payload);
         setPlcConnected(connected);
         setPlcErrorMessage(apiMessage(payload));
-        setLiveActuals(connected ? normalizeApiActuals(payload.actuals) : {});
+        const normalizedActuals = connected ? normalizeApiActuals(payload.actuals) : {};
+        setLiveActuals(normalizedActuals);
+        if (connected) setForceDepthHistory((previous) => updateForceDepthHistory(previous, normalizedActuals));
         setLiveRanges(connected ? normalizeApiRanges(payload.ranges) : {});
         setQrGrade(connected ? String(payload.statusRegisters?.station11?.qrGrade || "") : "");
         setCompletedIds(connected ? completedStationIdsFromApi(payload, PARAM_STATIONS) : []);
@@ -2352,8 +2388,8 @@ export default function Dashboard() {
         setNgCount(payload.summary?.ng ?? ((payload.common?.scrap ?? 0) + (payload.common?.rework ?? 0)));
         setCycleTime(typeof payload.common?.cycleTime?.actual === "number" ? payload.common.cycleTime.actual : null);
         setActiveAlarms(payload.common?.activeAlarms || "");
-        setComponentNo(String(payload.componentNo || payload.common?.componentNo || "-"));
-        setModelLabel(String(payload.modelNo || payload.common?.modelNo || payload.modelNumber || "-"));
+        setComponentNo(String(payload.componentNo ?? payload.common?.componentNo ?? ""));
+        setModelLabel(String(payload.modelNo ?? payload.common?.modelNo ?? payload.modelNumber ?? ""));
       } catch (error) {
         if (!alive) return;
         const message = error instanceof Error ? error.message : "PLC not connected";
@@ -2369,8 +2405,8 @@ export default function Dashboard() {
         setNgCount(0);
         setCycleTime(null);
         setActiveAlarms("");
-        setComponentNo("-");
-        setModelLabel("-");
+        setComponentNo("");
+        setModelLabel("");
       }
     };
 
@@ -2671,7 +2707,7 @@ export default function Dashboard() {
             ) : (
               activeStations.map(st => (
                 <div key={st.id} className={`station-cell ${st.id === 11 ? "inspection-station-cell" : ""}`}>
-                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} ranges={liveRanges[st.id] || {}} qrGrade={qrGrade} plcConnected={plcConnected} C={C} />
+                  <AssemblyStationPanel station={st} done={completedIds.includes(st.id)} loading={processingId === st.id} actuals={liveActuals[st.id] || {}} ranges={liveRanges[st.id] || {}} qrGrade={qrGrade} plcConnected={plcConnected} history={forceDepthHistory[st.id] || {}} C={C} />
                 </div>
               ))
             )}

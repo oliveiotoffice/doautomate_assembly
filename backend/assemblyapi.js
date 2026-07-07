@@ -1,4 +1,6 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const {
   ASSEMBLY_COUNT,
   ASSEMBLY_END,
@@ -10,11 +12,13 @@ const {
 } = require("./assembly-layout");
 
 const PORT = 5019;
-const POLL_MS = Number(process.env.ASSEMBLY_POLL_MS || process.env.PLC_POLL_MS || 1000);
+const POLL_MS = Number(process.env.ASSEMBLY_POLL_MS || process.env.PLC_POLL_MS || 100);
 const ERROR_DELAY_MS = Number(process.env.PLC_ERROR_DELAY_MS || 10000);
 const READ_CHUNK_SIZE = Number(process.env.ASSEMBLY_READ_CHUNK_SIZE || process.env.PLC_READ_CHUNK_SIZE || 50);
 const READ_CHUNK_DELAY_MS = Number(process.env.ASSEMBLY_READ_CHUNK_DELAY_MS || process.env.PLC_READ_CHUNK_DELAY_MS || 20);
 const READ_TIMEOUT_MS = Number(process.env.ASSEMBLY_READ_TIMEOUT_MS || process.env.PLC_READ_TIMEOUT_MS || 2500);
+const CSV_PATH = process.env.ASSEMBLY_CSV_PATH || path.join(__dirname, "data", "assembly-history.csv");
+const CSV_TEMP_PATH = `${CSV_PATH}.tmp`;
 
 let cache = makeDisconnectedPayload("Assembly PLC polling not started");
 let polling = false;
@@ -37,16 +41,139 @@ function numberRange(reading) {
     : null;
 }
 
+function flattenCsvFields(prefix, value, output) {
+  if (value === null || value === undefined) {
+    output[prefix] = "";
+    return;
+  }
+  if (Array.isArray(value)) {
+    output[prefix] = JSON.stringify(value);
+    return;
+  }
+  if (typeof value === "object") {
+    Object.keys(value).forEach(key => flattenCsvFields(prefix ? `${prefix}.${key}` : key, value[key], output));
+    return;
+  }
+  output[prefix] = value;
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quoted) {
+      if (char === '"' && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        value += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      values.push(value);
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+
+  values.push(value);
+  return values;
+}
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(line => line.length > 0);
+  if (lines.length === 0) return { headers: [], rows: [] };
+  const headers = parseCsvLine(lines[0]);
+  const rows = lines.slice(1).map(line => {
+    const values = parseCsvLine(line);
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+  });
+  return { headers, rows };
+}
+
+function makeCsvRow(payload, readTime) {
+  const row = {
+    componentNo: payload.componentNo,
+    rtcTime: readTime,
+    modelNo: payload.modelNo,
+    modelNumber: payload.modelNumber,
+    shaftId: payload.common.shaftId,
+    operator: payload.common.operator,
+    partsProcessed: payload.common.partsProcessed,
+    good: payload.common.good,
+    scrap: payload.common.scrap,
+    rework: payload.common.rework,
+    activeAlarms: payload.common.activeAlarms,
+  };
+
+  flattenCsvFields("common.cycleTime", payload.common.cycleTime, row);
+  flattenCsvFields("station7", payload.stations[7], row);
+  flattenCsvFields("station8", payload.stations[8], row);
+  flattenCsvFields("station9", payload.stations[9], row);
+  flattenCsvFields("station10", payload.stations[10], row);
+  flattenCsvFields("station11", payload.stations[11], row);
+  return row;
+}
+
+function writeCsv(headers, rows) {
+  fs.mkdirSync(path.dirname(CSV_PATH), { recursive: true });
+  if (fs.existsSync(CSV_TEMP_PATH)) fs.rmSync(CSV_TEMP_PATH, { force: true });
+  const lines = [
+    headers.map(csvEscape).join(","),
+    ...rows.map(row => headers.map(header => csvEscape(row[header])).join(",")),
+  ];
+  fs.writeFileSync(CSV_TEMP_PATH, `${lines.join("\n")}\n`, "utf8");
+  fs.renameSync(CSV_TEMP_PATH, CSV_PATH);
+}
+
+function upsertAssemblyCsv(payload, readTime) {
+  const componentNo = String(payload.componentNo ?? "").trim();
+  if (!componentNo) return;
+
+  const row = makeCsvRow(payload, readTime);
+  let headers = [];
+  let rows = [];
+
+  if (fs.existsSync(CSV_PATH)) {
+    ({ headers, rows } = parseCsv(fs.readFileSync(CSV_PATH, "utf8")));
+  }
+
+  const rowHeaders = Object.keys(row);
+  headers = [...headers, ...rowHeaders.filter(header => !headers.includes(header))];
+
+  const existingIndex = rows.findIndex(existing => existing.componentNo === componentNo);
+  if (existingIndex >= 0) {
+    rows[existingIndex] = { ...rows[existingIndex], ...row };
+  } else {
+    rows.push(row);
+  }
+
+  writeCsv(headers, rows);
+}
+
 function makePayload(words, config) {
   const decoded = decodeAssembly(words);
-  const modelNo = String(decoded.common.modelNo ?? 0);
-  const modelNumber = decoded.common.modelNo === 0 ? "-" : MODEL_NAMES[decoded.common.modelNo] || `Shaft-${modelNo}`;
-  const componentNo = decoded.common.componentNo ? String(decoded.common.componentNo) : "-";
+  const plcTime = "";
+  const modelNo = decoded.common.modelNo === null || decoded.common.modelNo === undefined ? "" : String(decoded.common.modelNo);
+  const modelNumber = decoded.common.modelNo === null || decoded.common.modelNo === undefined ? "" : String(decoded.common.modelNo);
+  const componentNo = String(decoded.common.componentNo ?? "");
 
   return {
     header: {
-      shaftNumber: String(decoded.common.shaftId || "-"),
-      operatorId: decoded.common.operator || "-",
+      shaftNumber: decoded.common.shaftId === null || decoded.common.shaftId === undefined ? "" : String(decoded.common.shaftId),
+      operatorId: decoded.common.operator || "",
       componentNo,
       modelNumber,
       
@@ -109,7 +236,8 @@ function makePayload(words, config) {
         shaftId: "D11000",
         operator: "D11001-D11010",
         modelNo: "D11011",
-        componentNo: "D11012-D11015",
+        componentNo: "D11040-D11054",
+        componentNoNumeric: "D11012-D11015",
         partsProcessed: "D11016",
         good: "D11017",
         scrap: "D11018",
@@ -126,22 +254,22 @@ function makePayload(words, config) {
       },
     },
     summary: {
-      total: decoded.common.partsProcessed || 0,
-      ok: decoded.common.good || 0,
-      ng: (decoded.common.scrap || 0) + (decoded.common.rework || 0),
-      scrap: decoded.common.scrap || 0,
-      rework: decoded.common.rework || 0,
+      total: decoded.common.partsProcessed,
+      ok: decoded.common.good,
+      ng: decoded.common.scrap + decoded.common.rework,
+      scrap: decoded.common.scrap,
+      rework: decoded.common.rework,
     },
     source: {
       backendUrl: `mc://${config.host}:${config.port}`,
       connected: true,
-      updatedAt: new Date().toISOString(),
+      updatedAt: plcTime,
     },
     plc: {
       host: config.host,
       port: config.port,
       connected: true,
-      updatedAt: new Date().toISOString(),
+      updatedAt: plcTime,
       readStartRegister: `D${ASSEMBLY_START}`,
       readEndRegister: `D${ASSEMBLY_END}`,
     },
@@ -152,33 +280,32 @@ function makePayload(words, config) {
 }
 
 function makeDisconnectedPayload(message) {
-  const updatedAt = new Date().toISOString();
   return {
-    header: { shaftNumber: "-", operatorId: "-", componentNo: "-", modelNumber: "-" },
+    header: { shaftNumber: "", operatorId: "", componentNo: "", modelNumber: "" },
     common: {
-      shaftId: 0,
+      shaftId: "",
       operator: "",
-      modelNo: 0,
-      componentNo: 0,
-      partsProcessed: 0,
-      good: 0,
-      scrap: 0,
-      rework: 0,
+      modelNo: "",
+      componentNo: "",
+      partsProcessed: null,
+      good: null,
+      scrap: null,
+      rework: null,
       activeAlarms: "",
     },
-    componentNo: "-",
-    modelNo: "0",
-    modelNumber: "-",
+    componentNo: "",
+    modelNo: "",
+    modelNumber: "",
     actuals: {},
     ranges: {},
     stations: {},
-    statusRegisters: { station11: { completedStatus: 0, qrGrade: "" } },
-    summary: { total: 0, ok: 0, ng: 0, scrap: 0, rework: 0 },
-    source: { backendUrl: "mc://unavailable", connected: false, message, updatedAt },
+    statusRegisters: {},
+    summary: { total: null, ok: null, ng: null, scrap: null, rework: null },
+    source: { backendUrl: "", connected: false, message, updatedAt: "" },
     plc: {
       connected: false,
       message,
-      updatedAt,
+      updatedAt: "",
       readStartRegister: `D${ASSEMBLY_START}`,
       readEndRegister: `D${ASSEMBLY_END}`,
     },
@@ -192,6 +319,12 @@ async function pollPlc() {
     const config = makeReadConfig();
     const words = await readWordsInChunks(config, ASSEMBLY_START, ASSEMBLY_COUNT);
     cache = makePayload(words, config);
+    try {
+      upsertAssemblyCsv(cache, cache.plc.updatedAt);
+    } catch (csvError) {
+      const csvMessage = csvError instanceof Error ? csvError.message : String(csvError);
+      console.error(`[${new Date().toISOString()}] Assembly CSV write failed: ${csvMessage}`);
+    }
     console.log(`[${new Date().toISOString()}] Assembly read ok model=${cache.modelNo || "-"} total=${cache.summary.total} ok=${cache.summary.ok} ng=${cache.summary.ng}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

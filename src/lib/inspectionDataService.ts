@@ -66,9 +66,9 @@ export type InspectionApiPayload = {
     qrGrade?: string | null;
   };
   summary: {
-    total: number;
-    ok: number;
-    ng: number;
+    total: number | null;
+    ok: number | null;
+    ng: number | null;
   };
   source: {
     backendUrl: string;
@@ -84,18 +84,16 @@ export type InspectionStationProgress = {
   loadingId: number | null;
 };
 
-const CURRENT_MODEL_NO: InspectionModelNo = "6630865";
-const NONE_MODEL_NO: InspectionModelNo = "0";
 const PIN_COUNT = 15;
 const SMALL_PIN_COUNT = 3;
 const DEFAULT_BACKEND_URL = "http://localhost:4000";
-const EMPTY_PIN_STATUSES: PlcPinStatus[] = Array.from({ length: PIN_COUNT }, () => 0);
-const EMPTY_SMALL_PIN_STATUSES: PlcPinStatus[] = Array.from({ length: SMALL_PIN_COUNT }, () => 0);
+const EMPTY_PIN_STATUSES: PlcPinStatus[] = [];
+const EMPTY_SMALL_PIN_STATUSES: PlcPinStatus[] = [];
 const EMPTY_HEADER: InspectionHeader = {
-  shaftNumber: "-",
-  operatorId: "-",
-  componentNo: "-",
-  modelNumber: "-",
+  shaftNumber: "",
+  operatorId: "",
+  componentNo: "",
+  modelNumber: "",
 };
 
 function hasActualValue(values: Record<number, number | null> | undefined) {
@@ -188,7 +186,7 @@ function normalizePinStatuses(payload: unknown): PlcPinStatus[] {
   return EMPTY_PIN_STATUSES;
 }
 
-function textValue(value: unknown, fallback = "-") {
+function textValue(value: unknown, fallback = "") {
   if (typeof value === "string" && value.trim()) return value;
   if (typeof value === "number") return String(value);
   return fallback;
@@ -232,10 +230,10 @@ function backendPlcConnected(payload: unknown) {
   return plc?.connected === true;
 }
 function normalizeBackendUpdatedAt(payload: unknown) {
-  if (!payload || typeof payload !== "object") return new Date().toISOString();
+  if (!payload || typeof payload !== "object") return "";
   const root = payload as Record<string, unknown>;
   const plc = root.plc && typeof root.plc === "object" ? root.plc as Record<string, unknown> : null;
-  return textValue(plc?.updatedAt ?? root.updatedAt ?? root.cpuTime, new Date().toISOString());
+  return textValue(plc?.updatedAt ?? root.updatedAt ?? root.cpuTime, "");
 }
 function normalizeSummary(payload: unknown, statuses: PlcPinStatus[]) {
   if (payload && typeof payload === "object") {
@@ -292,9 +290,9 @@ function normalizeCommon(payload: unknown, header: InspectionHeader): Inspection
       : {};
 
   return {
-    shift: numberValue(common.shift) ?? "-",
+    shift: numberValue(common.shift) ?? "",
     operator: textValue(common.operator, header.operatorId),
-    modelNo: textValue(common.modelNo ?? root?.modelNo, NONE_MODEL_NO),
+    modelNo: textValue(common.modelNo ?? root?.modelNo, ""),
     componentNo: textValue(common.componentNo ?? root?.componentNo, header.componentNo),
     rtc: normalizeRtc(common.rtc),
   };
@@ -318,7 +316,7 @@ async function readFromBackend() {
       header,
       common: normalizeCommon(payload, header),
       statuses,
-      summary: plcConnected ? normalizeSummary(payload, statuses) : { total: 0, ok: 0, ng: 0 },
+      summary: plcConnected ? normalizeSummary(payload, statuses) : { total: null, ok: null, ng: null },
       updatedAt: normalizeBackendUpdatedAt(payload),
       modelNo: textValue(asPayloadRecord(payload)?.modelNo),
       modelNumber: textValue(asPayloadRecord(payload)?.modelNumber),
@@ -336,10 +334,10 @@ async function readFromBackend() {
       header: EMPTY_HEADER,
       common: normalizeCommon(null, EMPTY_HEADER),
       statuses: EMPTY_PIN_STATUSES,
-      summary: { total: 0, ok: 0, ng: 0 },
-      updatedAt: new Date().toISOString(),
-      modelNo: NONE_MODEL_NO,
-      modelNumber: "-",
+      summary: { total: null, ok: null, ng: null },
+      updatedAt: "",
+      modelNo: "",
+      modelNumber: "",
       actuals: {},
       holes3: EMPTY_SMALL_PIN_STATUSES,
       special: EMPTY_SMALL_PIN_STATUSES,
@@ -374,7 +372,7 @@ function normalizeActuals(payload: unknown): InspectionValueMap {
 }
 
 function normalizeStatusArray(payload: unknown, keys: string[], count: number): PlcPinStatus[] {
-  if (!payload || typeof payload !== "object") return Array.from({ length: count }, () => 0);
+  if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
   const pinStatuses = root.pinStatuses && typeof root.pinStatuses === "object"
     ? root.pinStatuses as Record<string, unknown>
@@ -387,14 +385,14 @@ function normalizeStatusArray(payload: unknown, keys: string[], count: number): 
     }
   }
 
-  return Array.from({ length: count }, () => 0);
+  return [];
 }
 
 function emptyStation3(): NonNullable<InspectionApiPayload["station3"]> {
   return {
-    marking2d: 0,
-    topEngraving: 0,
-    sideEngraving: 0,
+    marking2d: null,
+    topEngraving: null,
+    sideEngraving: null,
     qrVerifierValue: "",
     qrGrade: null,
   };
@@ -431,7 +429,7 @@ function normalizeStatusRegisters(payload: unknown): NonNullable<InspectionApiPa
 
   return {
     station1: {
-      presence3d: statusFromReading(station1?.presence3d) ?? 0,
+      presence3d: statusFromReading(station1?.presence3d),
     },
     station2: {
       holes15: normalizePinStatuses(payload),
@@ -447,18 +445,14 @@ function normalizeStatusRegisters(payload: unknown): NonNullable<InspectionApiPa
 }
 
 export async function getInspectionData(modelNo?: string | null): Promise<InspectionApiPayload> {
-  const requestedModelNo = (modelNo ?? CURRENT_MODEL_NO).replace(/[^0-9]/g, "");
-  const normalizedModelNo: InspectionModelNo = requestedModelNo || CURRENT_MODEL_NO;
   const backend = await readFromBackend();
-  const backendModelNo = backend.modelNo.replace(/[^0-9]/g, "") || normalizedModelNo;
-  const backendModelNumber = backendModelNo === NONE_MODEL_NO ? "-" : backend.modelNumber !== "-" ? backend.modelNumber : `Shaft-${backendModelNo}`;
 
   return {
     header: backend.header,
     common: backend.common,
     componentNo: backend.header.componentNo,
-    modelNo: backendModelNo,
-    modelNumber: backendModelNumber,
+    modelNo: backend.modelNo,
+    modelNumber: backend.modelNumber,
     actuals: backend.actuals,
     pinStatuses: {
       holes15: backend.statuses,

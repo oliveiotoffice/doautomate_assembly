@@ -17,6 +17,8 @@ const {
 const ASSEMBLY_START = 11000;
 const ASSEMBLY_END = 11600;
 const ASSEMBLY_COUNT = ASSEMBLY_END - ASSEMBLY_START + 1;
+const COMPONENT_TEXT_ADDRESS = 11040;
+const COMPONENT_TEXT_WORDS = 15;
 const MODEL_NUMBERS = [0, 6630865, 6630867, 6630862];
 
 const MODEL_NAMES = {
@@ -60,7 +62,7 @@ const FLOAT_FIELDS = [
 ];
 
 const STATION_RANGES = {
-  common: { label: "Common Area", start: 11000, count: 40 },
+  common: { label: "Common Area", start: 11000, count: 55 },
   7: { label: "Station 7 Plug Press", start: 11100, count: 24 },
   8: { label: "Station 8 Ball Press", start: 11200, count: 24 },
   9: { label: "Station 9 Dowel Press", start: 11300, count: 24 },
@@ -123,17 +125,23 @@ function readModelNo(area) {
   return MODEL_LOW_WORDS[rawModelNo] || rawModelNo;
 }
 
+function numericComponentNo(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits || 0;
+}
+
 function writeCommon(area, values) {
   setAssemblyWords(area, 11000, [Number(values.shaftId || 0)]);
   setAssemblyWords(area, 11001, stringToWords(values.operator || "", 10));
   setAssemblyWords(area, 11011, [Number(values.modelNo || 0)]);
-  setAssemblyWords(area, 11012, uint64ToWords(values.componentNo || 0));
+  setAssemblyWords(area, 11012, uint64ToWords(numericComponentNo(values.componentNo)));
   setAssemblyWords(area, 11016, [Number(values.partsProcessed || 0)]);
   setAssemblyWords(area, 11017, [Number(values.good || 0)]);
   setAssemblyWords(area, 11018, [Number(values.scrap || 0)]);
   setAssemblyWords(area, 11019, [Number(values.rework || 0)]);
   writeFloatParameter(area, 11020, values.floats.cycleTime);
   setAssemblyWords(area, 11030, stringToWords(values.activeAlarms || "", 10));
+  setAssemblyWords(area, COMPONENT_TEXT_ADDRESS, stringToWords(values.componentNo || "", COMPONENT_TEXT_WORDS));
 }
 
 function writeAllFloats(area, values) {
@@ -152,11 +160,14 @@ function buildAssemblyArea(values) {
 }
 
 function decodeAssembly(area) {
+  const componentText = wordsToString(getAssemblyWords(area, COMPONENT_TEXT_ADDRESS, COMPONENT_TEXT_WORDS));
+  const componentNumeric = wordsToUInt64(getAssemblyWords(area, 11012, 4));
   const common = {
     shaftId: getAssemblyWords(area, 11000, 1)[0] || 0,
     operator: wordsToString(getAssemblyWords(area, 11001, 10)),
     modelNo: readModelNo(area),
-    componentNo: wordsToUInt64(getAssemblyWords(area, 11012, 4)),
+    componentNo: componentText,
+    componentNoNumeric: componentNumeric,
     partsProcessed: getAssemblyWords(area, 11016, 1)[0] || 0,
     good: getAssemblyWords(area, 11017, 1)[0] || 0,
     scrap: getAssemblyWords(area, 11018, 1)[0] || 0,
